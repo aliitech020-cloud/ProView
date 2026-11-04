@@ -14,8 +14,6 @@ from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor 
 from vtkmodules.vtkCommonCore import vtkPoints  # noqa: E402
 from vtkmodules.vtkCommonDataModel import vtkCellArray, vtkPolyData  # noqa: E402
 from vtkmodules.vtkInteractionStyle import vtkInteractorStyleTrackballCamera  # noqa: E402
-from vtkmodules.vtkInteractionWidgets import vtkOrientationMarkerWidget  # noqa: E402
-from vtkmodules.vtkRenderingAnnotation import vtkAxesActor  # noqa: E402
 from vtkmodules.vtkRenderingCore import (  # noqa: E402
     vtkActor2D,
     vtkPolyDataMapper2D,
@@ -33,6 +31,7 @@ class ViewerStyle(vtkInteractorStyleTrackballCamera):
     def __init__(self):
         super().__init__()
         self.tool = None
+        self.viewer = None
         self._right_rotating = False
         self.AddObserver("LeftButtonPressEvent", self._left_down)
         self.AddObserver("LeftButtonReleaseEvent", self._left_up)
@@ -51,6 +50,12 @@ class ViewerStyle(vtkInteractorStyleTrackballCamera):
 
     def _left_down(self, *_):
         x, y, ctrl, shift, rep = self._state()
+        if self.viewer is not None:
+            face = self.viewer.cube.hit(x, y)
+            if face is not None:
+                if face:
+                    self.viewer.set_view(face)
+                return
         if self.tool is not None and self.tool.on_press(x, y, ctrl, shift, rep):
             return
         self.OnLeftButtonDown()
@@ -72,6 +77,8 @@ class ViewerStyle(vtkInteractorStyleTrackballCamera):
 
     def _move(self, *_):
         x, y, ctrl, shift, _ = self._state()
+        if self.viewer is not None and self.GetState() == 0 and self.viewer.cube.hover(x, y):
+            self.viewer.render()
         if self.tool is not None and not self._right_rotating and self.tool.on_move(x, y, ctrl, shift):
             return
         self.OnMouseMove()
@@ -156,25 +163,22 @@ class Viewer(QVTKRenderWindowInteractor):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.rw = self.GetRenderWindow()
-        self.rw.SetMultiSamples(4)
+        self.rw.SetMultiSamples(0)  # MSAA breaks depth peeling (transparency); FXAA is used instead
         self.rw.SetAlphaBitPlanes(1)
         self.ren = self._make_renderer()
         self.rw.AddRenderer(self.ren)
         self.style = ViewerStyle()
+        self.style.viewer = self
         self.SetInteractorStyle(self.style)
 
         self.models = []
         self.split_renderers: list = []
         self._split = False
 
-        axes = vtkAxesActor()
-        axes.SetShaftTypeToCylinder()
-        axes.SetTotalLength(1, 1, 1)
-        self.orient = vtkOrientationMarkerWidget()
-        self.orient.SetOrientationMarker(axes)
-        self.orient.SetInteractor(self._Iren)
-        self.orient.SetViewport(0.0, 0.0, 0.14, 0.2)
-        self._orient_ready = False
+        from .view_cube import ViewCube
+
+        self.cube = ViewCube(self)
+        self._anim = None
         self.Initialize()
 
     @staticmethod
@@ -184,21 +188,18 @@ class Viewer(QVTKRenderWindowInteractor):
         ren.SetBackground(0.16, 0.18, 0.22)
         ren.SetBackground2(0.42, 0.46, 0.54)
         ren.SetUseDepthPeeling(1)
-        ren.SetMaximumNumberOfPeels(6)
+        ren.SetMaximumNumberOfPeels(8)
+        ren.SetOcclusionRatio(0.0)
+        ren.UseFXAAOn()
         return ren
-
-    def showEvent(self, ev):
-        super().showEvent(ev)
-        if not self._orient_ready:
-            self._orient_ready = True
-            self.orient.SetEnabled(1)
-            self.orient.InteractiveOff()
 
     # --------------------------------------------------------------- scene
     def add_model(self, model, fit=False):
         self.models.append(model)
         self.ren.AddActor(model.actor)
-        if fit or len(self.models) == 1:
+        if len(self.models) == 1:
+            self.set_view("iso", animate=False)
+        elif fit:
             self.fit()
         else:
             self.ren.ResetCameraClippingRange()
@@ -225,25 +226,75 @@ class Viewer(QVTKRenderWindowInteractor):
             r.ResetCameraClippingRange()
         self.rw.Render()
 
-    def set_view(self, name: str):
-        """Standard views. Z is up, the front looks along +Y."""
-        dirs = {
-            "front": ((0, -1, 0), (0, 0, 1)),
-            "back": ((0, 1, 0), (0, 0, 1)),
-            "left": ((-1, 0, 0), (0, 0, 1)),
-            "right": ((1, 0, 0), (0, 0, 1)),
-            "top": ((0, 0, 1), (0, 1, 0)),
-            "bottom": ((0, 0, -1), (0, -1, 0)),
-        }
-        pos, up = dirs[name]
-        rens = [self.ren] if not self._split else self.split_renderers
-        for r in rens:
-            cam = r.GetActiveCamera()
-            fp = np.array(cam.GetFocalPoint())
-            cam.SetPosition(*(fp + np.array(pos) * 100.0))
-            cam.SetViewUp(*up)
-            r.ResetCamera()
-        self.render()
+    VIEWS = {  # camera position direction (from focal point), view up
+        "front": ((0, -1, 0), (0, 0, 1)),
+        "back": ((0, 1, 0), (0, 0, 1)),
+        "left": ((-1, 0, 0), (0, 0, 1)),
+        "right": ((1, 0, 0), (0, 0, 1)),
+        "top": ((0, 0, 1), (0, 1, 0)),
+        "bottom": ((0, 0, -1), (0, -1, 0)),
+        "iso": ((1, -1, 1), (0, 0, 1)),
+    }
+
+    def set_view(self, name: str, animate: bool = True):
+        """Standard views (Z is up, the front looks along +Y), with a short smooth rotation."""
+        pos, up = self.VIEWS[name]
+        pos = np.array(pos, float) / np.linalg.norm(pos)
+        up = np.array(up, float)
+        if self._split:
+            for r in self.split_renderers:
+                cam = r.GetActiveCamera()
+                fp = np.array(cam.GetFocalPoint())
+                cam.SetPosition(*(fp + pos * cam.GetDistance()))
+                cam.SetViewUp(*up)
+                r.ResetCamera()
+            self.render()
+            return
+        cam = self.ren.GetActiveCamera()
+        if not animate:
+            self._place_camera(cam, pos, up)
+            self.ren.ResetCamera()
+            self.render()
+            return
+        from PySide6.QtCore import QTimer
+        from scipy.spatial.transform import Rotation, Slerp
+
+        def frame(back, upv):
+            upv = upv - back * (upv @ back)
+            upv /= np.linalg.norm(upv)
+            return np.column_stack([np.cross(upv, back), upv, back])
+
+        start_back = -np.array(cam.GetDirectionOfProjection())
+        start = frame(start_back, np.array(cam.GetViewUp()))
+        end = frame(pos, up)
+        slerp = Slerp([0.0, 1.0], Rotation.from_matrix([start, end]))
+        steps = 14
+        if self._anim is not None:
+            self._anim.stop()
+        state = {"i": 0}
+        timer = QTimer(self)
+        self._anim = timer
+
+        def tick():
+            state["i"] += 1
+            t = state["i"] / steps
+            t = t * t * (3 - 2 * t)  # ease in/out
+            R = slerp([t]).as_matrix()[0]
+            self._place_camera(cam, R[:, 2], R[:, 1])
+            if state["i"] >= steps:
+                timer.stop()
+                self._anim = None
+                self.ren.ResetCamera()
+            self.render()
+
+        timer.timeout.connect(tick)
+        timer.start(16)
+
+    @staticmethod
+    def _place_camera(cam, back, up):
+        fp = np.array(cam.GetFocalPoint())
+        cam.SetPosition(*(fp + back * cam.GetDistance()))
+        cam.SetViewUp(*up)
 
     def set_parallel(self, on: bool):
         for r in [self.ren] + self.split_renderers:
@@ -259,6 +310,7 @@ class Viewer(QVTKRenderWindowInteractor):
         if self._split:
             self.exit_split()
         self._split = True
+        self.cube.set_visible(False)
         self.rw.RemoveRenderer(self.ren)
         left, right = self._make_renderer(), self._make_renderer()
         left.SetViewport(0.0, 0.0, 0.5, 1.0)
@@ -287,6 +339,7 @@ class Viewer(QVTKRenderWindowInteractor):
         self.split_renderers = []
         self._split = False
         self.rw.AddRenderer(self.ren)
+        self.cube.set_visible(True)
         self.render()
 
     def poked_renderer(self, x, y):
@@ -299,14 +352,13 @@ class Viewer(QVTKRenderWindowInteractor):
         states = [(a, a.GetVisibility()) for a in hide]
         for a, _ in states:
             a.SetVisibility(False)
-        self.orient.SetEnabled(0) if self._orient_ready else None
+        cube_on = self.cube.ren.GetDraw()
+        self.cube.set_visible(False)
         self.render()
         z = read_zbuffer(renderer)
         for a, v in states:
             a.SetVisibility(v)
-        if self._orient_ready:
-            self.orient.SetEnabled(1)
-            self.orient.InteractiveOff()
+        self.cube.set_visible(cube_on)
         return z
 
     def screenshot(self, path: str):

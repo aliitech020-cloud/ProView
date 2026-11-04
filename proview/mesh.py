@@ -17,9 +17,11 @@ _STL_RECORD = np.dtype([("n", "<f4", (3,)), ("v", "<f4", (3, 3)), ("a", "<u2")])
 class Mesh:
     """Indexed triangle mesh: vertices (n, 3) float64 and faces (m, 3) int64."""
 
-    def __init__(self, vertices: np.ndarray, faces: np.ndarray):
+    def __init__(self, vertices: np.ndarray, faces: np.ndarray, colors: np.ndarray | None = None):
         self.vertices = np.ascontiguousarray(vertices, dtype=np.float64).reshape(-1, 3)
         self.faces = np.ascontiguousarray(faces, dtype=np.int64).reshape(-1, 3)
+        # optional per-vertex RGB colors (uint8), e.g. from intraoral scanner PLY files
+        self.colors = None if colors is None else np.ascontiguousarray(colors, dtype=np.uint8).reshape(-1, 3)
 
     # ------------------------------------------------------------------ info
     @property
@@ -31,7 +33,7 @@ class Mesh:
         return len(self.faces)
 
     def copy(self) -> "Mesh":
-        return Mesh(self.vertices.copy(), self.faces.copy())
+        return Mesh(self.vertices.copy(), self.faces.copy(), None if self.colors is None else self.colors.copy())
 
     def bounds(self) -> tuple[np.ndarray, np.ndarray]:
         if self.n_vertices == 0:
@@ -78,7 +80,8 @@ class Mesh:
         used = np.zeros(self.n_vertices, dtype=bool)
         used[faces.ravel()] = True
         remap = np.cumsum(used) - 1
-        return Mesh(self.vertices[used], remap[faces])
+        colors = None if self.colors is None else self.colors[used]
+        return Mesh(self.vertices[used], remap[faces], colors)
 
     def connected_components(self) -> tuple[int, np.ndarray]:
         """Label faces by connected component (faces sharing a vertex)."""
@@ -96,7 +99,7 @@ class Mesh:
         return count, vlabels[f[:, 0]]
 
     def transformed(self, matrix: np.ndarray) -> "Mesh":
-        return Mesh(transform_points(matrix, self.vertices), self.faces.copy())
+        return Mesh(transform_points(matrix, self.vertices), self.faces.copy(), self.colors)
 
 
 def transform_points(matrix: np.ndarray, pts: np.ndarray) -> np.ndarray:
@@ -164,7 +167,9 @@ def save_stl(path: str, mesh: Mesh, matrix: np.ndarray | None = None, header: st
         fh.write(rec.tobytes())
 
 
-def merge_meshes(meshes: list[Mesh]) -> Mesh:
+def merge_meshes(meshes: list[Mesh], fallback_colors=None) -> Mesh:
+    """Concatenate meshes. If any has vertex colors, the others get ``fallback_colors[i]``
+    (an RGB tuple in 0..1, default light gray) so the result keeps its colors."""
     verts, faces, off = [], [], 0
     for m in meshes:
         verts.append(m.vertices)
@@ -172,7 +177,17 @@ def merge_meshes(meshes: list[Mesh]) -> Mesh:
         off += m.n_vertices
     if not verts:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
-    return Mesh(np.vstack(verts), np.vstack(faces))
+    colors = None
+    if any(m.colors is not None for m in meshes):
+        parts = []
+        for i, m in enumerate(meshes):
+            if m.colors is not None:
+                parts.append(m.colors)
+            else:
+                rgb = fallback_colors[i] if fallback_colors else (0.85, 0.85, 0.85)
+                parts.append(np.tile((np.array(rgb) * 255).round().astype(np.uint8), (m.n_vertices, 1)))
+        colors = np.vstack(parts)
+    return Mesh(np.vstack(verts), np.vstack(faces), colors)
 
 
 # ---------------------------------------------------------------------- VTK
@@ -195,6 +210,10 @@ def to_polydata(mesh: Mesh):
         normals = numpy_to_vtk(np.ascontiguousarray(mesh.vertex_normals(), dtype=np.float32), deep=True)
         normals.SetName("Normals")
         pd.GetPointData().SetNormals(normals)
+    if mesh.colors is not None:
+        cols = numpy_to_vtk(np.ascontiguousarray(mesh.colors, dtype=np.uint8), deep=True)
+        cols.SetName("VertexColors")
+        pd.GetPointData().AddArray(cols)
     return pd
 
 
@@ -290,7 +309,7 @@ def load_ply(path: str) -> Mesh:
     with open(path, "rb") as fh:
         data = fh.read()
     fmt, elements, pos = _parse_ply_header(data)
-    verts, faces = None, None
+    verts, faces, colors = None, None, None
     if fmt == "ascii":
         lines = data[pos:].decode("ascii", "replace").splitlines()
         lines = [ln for ln in lines if ln.strip() and not ln.startswith("comment")]
@@ -303,6 +322,8 @@ def load_ply(path: str) -> Mesh:
                 ix = [names.index(c) for c in ("x", "y", "z")]
                 table = np.array([r.split()[: len(names)] for r in rows], dtype=np.float64)
                 verts = table[:, ix]
+                colors = _ply_colors({n: table[:, i] for i, n in enumerate(names)},
+                                     {p[0]: p[1] for p in el["props"] if len(p) == 2})
             elif el["name"] == "face":
                 polys = [list(map(int, r.split()[1: 1 + int(r.split()[0])])) for r in rows]
                 faces = _triangulate(polys)
@@ -312,6 +333,8 @@ def load_ply(path: str) -> Mesh:
             vals, pos = _read_binary_element(data, pos, el, endian)
             if el["name"] == "vertex":
                 verts = np.stack([np.asarray(vals[c], dtype=np.float64) for c in ("x", "y", "z")], 1)
+                colors = _ply_colors({k: np.asarray(v) for k, v in vals.items()},
+                                     {p[0]: p[1] for p in el["props"] if len(p) == 2})
             elif el["name"] == "face":
                 key = next(p[0] for p in el["props"] if len(p) == 4)
                 idx = vals[key]
@@ -325,25 +348,45 @@ def load_ply(path: str) -> Mesh:
         raise ValueError("PLY file has no faces (point clouds are not supported)")
     ok = (faces[:, 0] != faces[:, 1]) & (faces[:, 1] != faces[:, 2]) & (faces[:, 0] != faces[:, 2])
     ok &= (faces >= 0).all(1) & (faces < len(verts)).all(1)
-    mesh = Mesh(verts, faces)
+    mesh = Mesh(verts, faces, colors)
     return mesh if ok.all() else mesh.keep_faces(ok)
+
+
+def _ply_colors(columns: dict, types: dict):
+    """Vertex RGB colors as uint8 from PLY vertex columns, or None."""
+    for names in (("red", "green", "blue"), ("diffuse_red", "diffuse_green", "diffuse_blue"), ("r", "g", "b")):
+        if all(n in columns for n in names):
+            rgb = np.stack([np.asarray(columns[n], dtype=np.float64) for n in names], 1)
+            if types.get(names[0], "u1").startswith("f") and rgb.max(initial=0) <= 1.0:
+                rgb = rgb * 255.0
+            elif types.get(names[0], "u1") in ("u2", "i2"):
+                rgb = rgb / 257.0
+            return np.clip(rgb.round(), 0, 255).astype(np.uint8)
+    return None
 
 
 def save_ply(path: str, mesh: Mesh, matrix: np.ndarray | None = None) -> None:
     """Write a binary little-endian PLY."""
     verts = mesh.vertices if matrix is None else transform_points(matrix, mesh.vertices)
+    has_color = mesh.colors is not None
     header = (
         "ply\nformat binary_little_endian 1.0\ncomment ProView\n"
         f"element vertex {mesh.n_vertices}\nproperty float x\nproperty float y\nproperty float z\n"
-        f"element face {mesh.n_faces}\nproperty list uchar int vertex_indices\nend_header\n"
+        + ("property uchar red\nproperty uchar green\nproperty uchar blue\n" if has_color else "")
+        + f"element face {mesh.n_faces}\nproperty list uchar int vertex_indices\nend_header\n"
     )
+    vfields = [("p", "<f4", (3,))] + ([("c", "u1", (3,))] if has_color else [])
+    vrec = np.empty(mesh.n_vertices, dtype=np.dtype(vfields))
+    vrec["p"] = verts
+    if has_color:
+        vrec["c"] = mesh.colors
     fdt = np.dtype([("n", "u1"), ("i", "<i4", (3,))])
     frec = np.empty(mesh.n_faces, dtype=fdt)
     frec["n"] = 3
     frec["i"] = mesh.faces
     with open(path, "wb") as fh:
         fh.write(header.encode("ascii"))
-        fh.write(np.ascontiguousarray(verts, dtype="<f4").tobytes())
+        fh.write(vrec.tobytes())
         fh.write(frec.tobytes())
 
 

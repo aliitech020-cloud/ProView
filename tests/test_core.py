@@ -153,5 +153,18 @@ def test_ply_roundtrip_and_formats():
                       f"property uchar blue\nelement face {m.n_faces}\nproperty list uchar int vertex_indices\n"
                       "end_header\n").encode())
             fh.write(v.tobytes() + f.tobytes())
+        v["red"], v["green"], v["blue"] = 10, 200, 30
+        with open(os.path.join(d, "b.ply"), "r+b") as fh:
+            fh.seek(-(len(v.tobytes()) + len(f.tobytes())), 2)
+            fh.write(v.tobytes())
         b = load_mesh(os.path.join(d, "b.ply"))
         assert b.n_faces == m.n_faces and np.allclose(b.vertices, m.vertices, atol=1e-4)
+        assert b.colors is not None and (b.colors == [10, 200, 30]).all()
+        # colors survive cutting, merging and saving
+        cut = b.remove_faces(np.arange(b.n_faces) < 50)
+        assert len(cut.colors) == cut.n_vertices
+        from proview.mesh import merge_meshes
+        mm = merge_meshes([cut, m], [(1, 1, 1), (1, 0, 0)])
+        assert mm.colors.shape == (mm.n_vertices, 3) and (mm.colors[-1] == [255, 0, 0]).all()
+        save_mesh(os.path.join(d, "c.ply"), mm)
+        assert (load_mesh(os.path.join(d, "c.ply")).colors == mm.colors).all()

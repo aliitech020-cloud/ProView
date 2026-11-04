@@ -18,6 +18,7 @@ PALETTE = [
     (0.65, 0.92, 0.90),  # cyan
 ]
 SELECT_COLOR = np.array([230, 40, 40], dtype=np.uint8)
+SELECT_COLOR_ON_SCAN = np.array([30, 140, 255], dtype=np.uint8)  # gums are red, so use blue
 
 
 def numpy_to_vtk_matrix(M: np.ndarray) -> vtkMatrix4x4:
@@ -43,7 +44,6 @@ class Model:
         self.opacity = 1.0
 
         self.mapper = vtkPolyDataMapper()
-        self.mapper.SetScalarModeToUseCellData()
         self.mapper.SetColorModeToDirectScalars()
         self.mapper.ScalarVisibilityOff()
         self.mapper.SetResolveCoincidentTopologyToPolygonOffset()
@@ -64,6 +64,7 @@ class Model:
         self.set_color(self.color)
 
         self.mesh: Mesh = mesh
+        self.show_colors = True
         self.selection = np.zeros(0, dtype=bool)
         self._world = None
         self.set_mesh(mesh)
@@ -75,12 +76,53 @@ class Model:
         self.mapper.SetInputData(self.polydata)
         self.selection = np.zeros(mesh.n_faces, dtype=bool)
         self._colors = np.empty((mesh.n_faces, 3), dtype=np.uint8)
-        self._colors[:] = self._base_rgb()
+        self._colors[:] = self._base_face_colors()
         self._colors_vtk = numpy_to_vtk(self._colors, deep=False)
         self._colors_vtk.SetName("SelectionColors")
-        self.polydata.GetCellData().SetScalars(self._colors_vtk)
-        self.mapper.ScalarVisibilityOff()
+        self.polydata.GetCellData().AddArray(self._colors_vtk)
         self._world = None
+        self._update_scalars()
+
+    @property
+    def has_colors(self) -> bool:
+        return self.mesh.colors is not None
+
+    def _base_face_colors(self) -> np.ndarray:
+        """Per-face color used for unselected faces while a selection is shown (cached)."""
+        key = (id(self.mesh), self.show_colors, self.color)
+        if getattr(self, "_base_key", None) != key:
+            if self.has_colors and self.show_colors and self.mesh.n_faces:
+                self._base_cache = self.mesh.colors[self.mesh.faces].mean(axis=1).round().astype(np.uint8)
+            else:
+                self._base_cache = self._base_rgb()
+            self._base_key = key
+        return self._base_cache
+
+    @property
+    def select_color(self) -> np.ndarray:
+        return SELECT_COLOR_ON_SCAN if self.has_colors and self.show_colors else SELECT_COLOR
+
+    def _update_scalars(self) -> None:
+        if self.selection.any():
+            self.mapper.SetScalarModeToUseCellFieldData()
+            self.mapper.SelectColorArray("SelectionColors")
+            self.mapper.ScalarVisibilityOn()
+        elif self.has_colors and self.show_colors:
+            self.mapper.SetScalarModeToUsePointFieldData()
+            self.mapper.SelectColorArray("VertexColors")
+            self.mapper.ScalarVisibilityOn()
+        else:
+            self.mapper.ScalarVisibilityOff()
+        self.actor.GetProperty().SetSpecular(0.08 if self.has_colors and self.show_colors else 0.25)
+
+    def set_show_colors(self, on: bool) -> None:
+        self.show_colors = on
+        if hasattr(self, "_colors"):
+            self._colors[self.selection] = self.select_color
+            self._colors[~self.selection] = self._base_face_colors()[~self.selection] \
+                if self.has_colors and on else self._base_rgb()
+            self._colors_vtk.Modified()
+            self._update_scalars()
 
     def set_matrix(self, M: np.ndarray) -> None:
         self.matrix = np.array(M, dtype=np.float64)
@@ -94,7 +136,7 @@ class Model:
     def set_color(self, color) -> None:
         self.color = tuple(color)
         self.actor.GetProperty().SetColor(*self.color)
-        if hasattr(self, "_colors"):
+        if hasattr(self, "_colors") and not (self.has_colors and self.show_colors):
             self._colors[~self.selection] = self._base_rgb()
             self._colors_vtk.Modified()
 
@@ -115,11 +157,14 @@ class Model:
         changed = mask != self.selection
         self.selection = mask.copy()
         if changed.any():
-            self._colors[changed & mask] = SELECT_COLOR
-            self._colors[changed & ~mask] = self._base_rgb()
+            self._colors[changed & mask] = self.select_color
+            off = changed & ~mask
+            if off.any():
+                base = self._base_face_colors()
+                self._colors[off] = base[off] if base.ndim == 2 else base
             self._colors_vtk.Modified()
             self.polydata.Modified()
-        self.mapper.SetScalarVisibility(bool(mask.any()))
+        self._update_scalars()
 
     def clear_selection(self) -> None:
         self.set_selection(np.zeros(self.mesh.n_faces, dtype=bool))

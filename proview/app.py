@@ -5,24 +5,18 @@ import os
 import sys
 
 import numpy as np
-from PySide6.QtCore import QSettings, QSize, Qt
+from PySide6.QtCore import QEvent, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence, QPalette, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QApplication,
-    QColorDialog,
     QDockWidget,
     QFileDialog,
-    QHBoxLayout,
-    QLabel,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QMessageBox,
-    QPushButton,
-    QSlider,
+    QSizePolicy,
     QStackedWidget,
-    QVBoxLayout,
+    QToolBar,
+    QToolButton,
     QWidget,
 )
 
@@ -30,12 +24,24 @@ from . import __version__
 from .align_tool import AlignController, AlignPanel
 from .cut_tool import BRUSH, LASSO, POLYGON, CutPanel, CutTool
 from .i18n import set_language, tr
-from .icons import icon
+from .icons import app_icon, icon
 from .mesh import MESH_EXTENSIONS, load_mesh, merge_meshes, save_mesh
 from .model import Model
+from .models_panel import ModelsPanel
 from .viewer import Viewer
 
 UNDO_LIMIT = 30
+
+TOOLBAR_STYLE = """
+QToolBar#actionBar { background:#1b1d22; border:none; border-bottom:1px solid #0f1013; padding:6px 10px; spacing:6px; }
+QToolBar#actionBar QToolButton { color:#e6e8ec; border:1px solid transparent; border-radius:7px; padding:4px; }
+QToolBar#actionBar QToolButton:hover { background:#2a2e36; border-color:#3a404b; }
+QToolBar#actionBar QToolButton[tile="true"] { background:#25282f; border:1px solid #30343c; border-radius:9px;
+    min-width:66px; max-width:66px; min-height:58px; font-size:11px; padding:5px 2px 4px 2px; }
+QToolBar#actionBar QToolButton[tile="true"]:hover { background:#2f343e; border-color:#4a90e2; }
+QToolBar#actionBar QToolButton[tile="true"]:checked { background:#1d3a5e; border:1px solid #4aa3ff; }
+QToolBar#actionBar QToolButton[tile="true"]:pressed { background:#173050; }
+"""
 
 
 class MainWindow(QMainWindow):
@@ -43,6 +49,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = settings
         self.setWindowTitle(tr("app_title"))
+        self.setWindowIcon(app_icon())
         self.resize(1400, 880)
         self.setAcceptDrops(True)
         self.undo_stack: list[tuple[Model, object, np.ndarray]] = []
@@ -54,50 +61,15 @@ class MainWindow(QMainWindow):
         self.cut = CutTool(self.viewer, self.active_model, self.push_undo, self._tools_changed)
         self.align = AlignController(self.viewer, self.push_undo, self._tools_changed, self.statusBar().showMessage)
 
-        self._build_models_dock()
+        self.panel = ModelsPanel(self, self.viewer, self._models_changed, self.merge_models,
+                                 self._remove_model, self._model_selected)
+        self.model_list = self.panel.list
         self._build_tools_dock()
         self._build_actions()
         self._build_shortcuts()
         self.statusBar().showMessage(tr("drop_hint"))
 
     # ================================================================ UI
-    def _build_models_dock(self):
-        dock = QDockWidget(tr("models"), self)
-        dock.setObjectName("models")
-        dock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
-        w = QWidget()
-        lay = QVBoxLayout(w)
-        self.model_list = QListWidget()
-        self.model_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.model_list.setToolTip(tr("models_tip"))
-        self.model_list.currentRowChanged.connect(self._model_selected)
-        self.model_list.itemChanged.connect(self._model_item_changed)
-        lay.addWidget(self.model_list)
-        row = QHBoxLayout()
-        self.color_btn = QPushButton(icon("color"), tr("color"))
-        self.color_btn.clicked.connect(self._pick_color)
-        row.addWidget(self.color_btn)
-        merge_btn = QPushButton(icon("merge"), tr("merge"))
-        merge_btn.setToolTip(tr("merge_tip"))
-        merge_btn.clicked.connect(self.merge_models)
-        row.addWidget(merge_btn)
-        rm = QPushButton(icon("remove"), tr("remove_model"))
-        rm.clicked.connect(self._remove_model)
-        row.addWidget(rm)
-        lay.addLayout(row)
-        lay.addWidget(QLabel(tr("opacity")))
-        self.opacity = QSlider(Qt.Horizontal)
-        self.opacity.setRange(10, 100)
-        self.opacity.setValue(100)
-        self.opacity.valueChanged.connect(self._opacity_changed)
-        lay.addWidget(self.opacity)
-        self.info = QLabel(tr("no_model"))
-        self.info.setWordWrap(True)
-        lay.addWidget(self.info)
-        dock.setWidget(w)
-        dock.setMinimumWidth(230)
-        self.addDockWidget(Qt.LeftDockWidgetArea, dock)
-
     def _build_tools_dock(self):
         self.tools_dock = QDockWidget(tr("cut_title"), self)
         self.tools_dock.setObjectName("tools")
@@ -111,6 +83,7 @@ class MainWindow(QMainWindow):
         self.tools_dock.setMinimumWidth(300)
         self.addDockWidget(Qt.RightDockWidgetArea, self.tools_dock)
         self.tools_dock.hide()
+        self.tools_dock.visibilityChanged.connect(lambda _: QTimer.singleShot(0, self.panel.follow))
 
     def _act(self, text, slot, shortcut=None, checkable=False, icon_name=None):
         a = QAction(text, self)
@@ -130,16 +103,9 @@ class MainWindow(QMainWindow):
 
     def _build_actions(self):
         mb = self.menuBar()
-        tb = self.addToolBar("main")
-        tb.setObjectName("main_toolbar")
-        tb.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        tb.setIconSize(QSize(26, 26))
-        tb.setMovable(False)
-
         a_open = self._act(tr("open"), self.open_dialog, QKeySequence.Open, icon_name="open")
         a_save = self._act(tr("save"), self.save_model, QKeySequence.Save, icon_name="save")
         a_export = self._act(tr("save_merged"), self.save_merged)
-        a_merge = self._act(tr("merge"), self.merge_models, "M", icon_name="merge")
         a_exit = self._act(tr("exit"), self.close)
         m = mb.addMenu(tr("menu_file"))
         for a in (a_open, a_save, a_export):
@@ -153,43 +119,81 @@ class MainWindow(QMainWindow):
         mv = mb.addMenu(tr("menu_view"))
         a_fit = self._act(tr("reset_view"), self.viewer.fit, "F", icon_name="fit")
         mv.addAction(a_fit)
-        view_actions = []
-        for name in ("front", "back", "left", "right", "top", "bottom"):
-            a = self._act(tr("view_" + name), lambda n=name: self.viewer.set_view(n), icon_name="view_" + name)
-            mv.addAction(a)
-            view_actions.append(a)
+        for key, name in (("1", "front"), ("2", "back"), ("3", "left"), ("4", "right"),
+                          ("5", "top"), ("6", "bottom"), ("0", "iso")):
+            mv.addAction(self._act(tr("view_" + name), lambda n=name: self.viewer.set_view(n), key,
+                                   icon_name="view_" + name if name != "iso" else None))
         mv.addSeparator()
         self.a_edges = self._act(tr("wireframe"), self._toggle_edges, "E", checkable=True, icon_name="edges")
         mv.addAction(self.a_edges)
+        self.a_colors = self._act(tr("scan_colors"), self._toggle_scan_colors, "C", checkable=True,
+                                  icon_name="scan_colors")
+        self.a_colors.setChecked(True)
+        mv.addAction(self.a_colors)
         a_par = self._act(tr("parallel"), self.viewer.set_parallel, checkable=True)
         mv.addAction(a_par)
 
         self.a_cut = self._act(tr("tool_cut"), self._toggle_cut, "X", checkable=True, icon_name="cut")
         self.a_align = self._act(tr("tool_align"), self._toggle_align, "A", checkable=True, icon_name="align")
+        a_merge = self._act(tr("merge"), self.merge_models, "M", icon_name="merge")
         grp = QActionGroup(self)
         grp.setExclusionPolicy(QActionGroup.ExclusionPolicy.ExclusiveOptional)
         grp.addAction(self.a_cut)
         grp.addAction(self.a_align)
         mt = mb.addMenu(tr("menu_tools"))
-        mt.addAction(self.a_cut)
-        mt.addAction(self.a_align)
-        mt.addAction(a_merge)
+        for a in (self.a_cut, self.a_align, a_merge):
+            mt.addAction(a)
 
+        a_help = self._act(tr("shortcuts"), lambda: QMessageBox.information(self, tr("shortcuts"), tr("shortcut_text")),
+                           icon_name="help")
         mh = mb.addMenu(tr("menu_help"))
-        mh.addAction(self._act(tr("shortcuts"), lambda: QMessageBox.information(self, tr("shortcuts"), tr("shortcut_text"))))
-        mh.addAction(self._act(tr("about"), lambda: QMessageBox.about(self, tr("about"), tr("about_text", v=__version__))))
+        mh.addAction(a_help)
+        mh.addAction(self._act(tr("about"), self._about))
 
-        for a in (a_open, a_save, a_undo):
+        # action bar: file buttons on the left, big tool tiles centred
+        tb = QToolBar("actions")
+        tb.setObjectName("actionBar")
+        tb.setMovable(False)
+        tb.setFloatable(False)
+        tb.setIconSize(QSize(26, 26))
+        tb.setStyleSheet(TOOLBAR_STYLE)
+        self.addToolBar(Qt.TopToolBarArea, tb)
+        left = [a_open, a_save, a_undo]
+        for a in left:
             tb.addAction(a)
-        tb.addSeparator()
-        tb.addAction(a_fit)
-        for a in view_actions:
-            tb.addAction(a)
-        tb.addAction(self.a_edges)
-        tb.addSeparator()
-        tb.addAction(self.a_cut)
-        tb.addAction(self.a_align)
-        tb.addAction(a_merge)
+        tb.addWidget(self._spacer())
+        tiles = [
+            (self.a_cut, tr("tile_cut")), (self.a_align, tr("tile_align")), (a_merge, tr("tile_merge")),
+            (self.a_colors, tr("tile_colors")), (self.a_edges, tr("tile_edges")), (a_fit, tr("tile_fit")),
+        ]
+        for a, label in tiles:
+            btn = QToolButton()
+            btn.setDefaultAction(a)
+            btn.setText(label)
+            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            btn.setIconSize(QSize(28, 28))
+            btn.setProperty("tile", True)
+            a.changed.connect(lambda b=btn, t=label: b.setText(t))
+            tb.addWidget(btn)
+        tb.addWidget(self._spacer())
+        tb.addAction(a_help)
+        # balance the left group so the tiles stay centred
+        pad = QWidget()
+        pad.setFixedWidth(2 * 40)
+        tb.addWidget(pad)
+
+    @staticmethod
+    def _spacer():
+        w = QWidget()
+        w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        return w
+
+    def _about(self):
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("about"))
+        box.setIconPixmap(app_icon().pixmap(96, 96))
+        box.setText(tr("about_text", v=__version__))
+        box.exec()
 
     def _build_shortcuts(self):
         def sc(key, fn):
@@ -206,6 +210,31 @@ class MainWindow(QMainWindow):
         sc("P", lambda: self._cut_mode(POLYGON))
         sc("[", lambda: self._brush_size(1 / 1.2))
         sc("]", lambda: self._brush_size(1.2))
+
+    # ============================================== floating panel tracking
+    def showEvent(self, ev):
+        super().showEvent(ev)
+        QTimer.singleShot(0, self._show_panel)
+
+    def _show_panel(self):
+        self.panel.show()
+        self.panel.follow()
+
+    def moveEvent(self, ev):
+        super().moveEvent(ev)
+        self.panel.follow()
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        QTimer.singleShot(0, self.panel.follow)
+
+    def changeEvent(self, ev):
+        super().changeEvent(ev)
+        if ev.type() == QEvent.WindowStateChange:
+            if self.isMinimized():
+                self.panel.hide()
+            else:
+                QTimer.singleShot(0, self._show_panel)
 
     # ============================================================ models
     def active_model(self) -> Model | None:
@@ -243,17 +272,13 @@ class MainWindow(QMainWindow):
 
     def _add_model(self, model: Model):
         model.set_edges(self.a_edges.isChecked())
+        model.set_show_colors(self.a_colors.isChecked())
         self.viewer.add_model(model, fit=True)
-        item = QListWidgetItem(model.name)
-        item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-        item.setCheckState(Qt.Checked)
-        self.model_list.addItem(item)
-        self.model_list.setCurrentRow(self.model_list.count() - 1)
+        self.panel.add_model(model)
 
     def merge_models(self):
         """Combine the selected models (or all visible ones) into one new model."""
-        rows = sorted({self.model_list.row(i) for i in self.model_list.selectedItems()})
-        parts = [self.viewer.models[r] for r in rows]
+        parts = [self.viewer.models[r] for r in self.panel.selected_rows()]
         if len(parts) < 2:
             parts = [m for m in self.viewer.models if m.visible]
         if len(parts) < 2:
@@ -263,22 +288,19 @@ class MainWindow(QMainWindow):
         self.align.stop_picking()
         for m in parts:
             m.clear_selection()
-        mesh = merge_meshes([m.mesh.transformed(m.matrix) for m in parts])
-        names = [m.name for m in parts]
-        name = "Merged - " + " + ".join(names) if len(" + ".join(names)) < 60 else f"Merged ({len(parts)} models)"
+        mesh = merge_meshes([m.mesh.transformed(m.matrix) for m in parts], [m.color for m in parts])
+        names = " + ".join(m.name for m in parts)
+        name = "Merged - " + names if len(names) < 60 else f"Merged ({len(parts)} models)"
         for m in parts:
-            self.model_list.item(self.viewer.models.index(m)).setCheckState(Qt.Unchecked)
+            m.set_visible(False)
         self._add_model(Model(name, mesh, color=parts[0].color))
+        self.panel.refresh_rows()
         self.align_panel.refresh_models()
         self._update_info()
         self.statusBar().showMessage(tr("merge_done", n=len(parts), faces=mesh.n_faces))
 
     def _model_selected(self, row):
         m = self.active_model()
-        if m is not None:
-            self.opacity.blockSignals(True)
-            self.opacity.setValue(int(m.opacity * 100))
-            self.opacity.blockSignals(False)
         for other in self.viewer.models:
             if other is not m and other.selection.any():
                 other.clear_selection()
@@ -286,26 +308,9 @@ class MainWindow(QMainWindow):
         self._update_info()
         self.viewer.render()
 
-    def _model_item_changed(self, item):
-        row = self.model_list.row(item)
-        if 0 <= row < len(self.viewer.models):
-            self.viewer.models[row].set_visible(item.checkState() == Qt.Checked)
-            self.viewer.render()
-
-    def _pick_color(self):
-        m = self.active_model()
-        if m is None:
-            return
-        c = QColorDialog.getColor(QColor.fromRgbF(*m.color), self)
-        if c.isValid():
-            m.set_color((c.redF(), c.greenF(), c.blueF()))
-            self.viewer.render()
-
-    def _opacity_changed(self, v):
-        m = self.active_model()
-        if m is not None:
-            m.set_opacity(v / 100.0)
-            self.viewer.render()
+    def _models_changed(self):
+        self.align_panel.refresh_models()
+        self._update_info()
 
     def _remove_model(self):
         m = self.active_model()
@@ -316,7 +321,7 @@ class MainWindow(QMainWindow):
         self.align.stop_picking()
         row = self.viewer.models.index(m)
         self.viewer.remove_model(m)
-        self.model_list.takeItem(row)
+        self.panel.remove_row(row)
         self.undo_stack = [u for u in self.undo_stack if u[0] is not m]
         self.align_panel.refresh_models()
         self._update_info()
@@ -326,19 +331,28 @@ class MainWindow(QMainWindow):
             m.set_edges(on)
         self.viewer.render()
 
+    def _toggle_scan_colors(self, on):
+        for m in self.viewer.models:
+            m.set_show_colors(on)
+        self.panel.refresh_rows()
+        self.viewer.render()
+
     def _update_info(self):
         m = self.active_model()
         if m is None:
-            self.info.setText(tr("no_model"))
+            self.panel.info.setText(tr("no_model"))
             return
         lo, hi = m.world_bounds()
         sx, sy, sz = hi - lo
-        self.info.setText(tr("info", faces=m.mesh.n_faces, verts=m.mesh.n_vertices, sx=sx, sy=sy, sz=sz))
+        self.panel.info.setText(tr("info", faces=m.mesh.n_faces, verts=m.mesh.n_vertices, sx=sx, sy=sy, sz=sz))
 
     # ============================================================ saving
-    def _ask_save_path(self, default_name):
-        start = os.path.join(self._last_dir or "", default_name + ".stl")
-        path, chosen = QFileDialog.getSaveFileName(self, tr("save"), start, tr("save_filter"))
+    def _ask_save_path(self, default_name, colored=False):
+        start = os.path.join(self._last_dir or "", default_name + (".ply" if colored else ".stl"))
+        filt = tr("save_filter")
+        if colored:  # offer PLY first so the scan colors are kept
+            filt = ";;".join(reversed(filt.split(";;")))
+        path, chosen = QFileDialog.getSaveFileName(self, tr("save"), start, filt)
         if path and not path.lower().endswith(MESH_EXTENSIONS):
             path += ".ply" if "ply" in chosen.lower() else ".stl"
         return path
@@ -348,7 +362,7 @@ class MainWindow(QMainWindow):
         if m is None:
             QMessageBox.information(self, tr("save"), tr("select_model_first"))
             return
-        path = self._ask_save_path(m.name)
+        path = self._ask_save_path(m.name, m.has_colors)
         if path:
             save_mesh(path, m.mesh, m.matrix)
             self.statusBar().showMessage(tr("saved", path=path))
@@ -357,9 +371,9 @@ class MainWindow(QMainWindow):
         visible = [m for m in self.viewer.models if m.visible]
         if not visible:
             return
-        path = self._ask_save_path("merged")
+        path = self._ask_save_path("merged", any(m.has_colors for m in visible))
         if path:
-            save_mesh(path, merge_meshes([m.mesh.transformed(m.matrix) for m in visible]))
+            save_mesh(path, merge_meshes([m.mesh.transformed(m.matrix) for m in visible], [m.color for m in visible]))
             self.statusBar().showMessage(tr("saved", path=path))
 
     # ============================================================== undo
@@ -444,11 +458,6 @@ class MainWindow(QMainWindow):
         elif self.align.picking:
             self.align.undo_point()
 
-    def _set_lang(self, lang):
-        self.settings.setValue("lang", lang)
-        QMessageBox.information(self, tr("menu_language"), tr("restart_lang") + "\n" +
-                                ("Restart to apply." if lang == "en" else "أعد التشغيل للتطبيق."))
-
     # ======================================================= drag & drop
     def dragEnterEvent(self, ev):
         if ev.mimeData().hasUrls():
@@ -460,6 +469,7 @@ class MainWindow(QMainWindow):
             self.open_files(paths)
 
     def closeEvent(self, ev):
+        self.panel.close()
         self.viewer.Finalize()
         super().closeEvent(ev)
 
@@ -467,27 +477,36 @@ class MainWindow(QMainWindow):
 def _apply_dark_theme(app: QApplication):
     app.setStyle("Fusion")
     pal = QPalette()
-    base = QColor(43, 46, 52)
+    base = QColor(36, 39, 44)
     pal.setColor(QPalette.Window, base)
     pal.setColor(QPalette.WindowText, QColor(225, 225, 225))
-    pal.setColor(QPalette.Base, QColor(32, 34, 38))
+    pal.setColor(QPalette.Base, QColor(28, 30, 34))
     pal.setColor(QPalette.AlternateBase, base)
-    pal.setColor(QPalette.ToolTipBase, QColor(255, 255, 220))
-    pal.setColor(QPalette.ToolTipText, QColor(0, 0, 0))
+    pal.setColor(QPalette.ToolTipBase, QColor(30, 32, 36))
+    pal.setColor(QPalette.ToolTipText, QColor(230, 230, 230))
     pal.setColor(QPalette.Text, QColor(225, 225, 225))
-    pal.setColor(QPalette.Button, QColor(58, 62, 70))
+    pal.setColor(QPalette.Button, QColor(52, 56, 64))
     pal.setColor(QPalette.ButtonText, QColor(230, 230, 230))
     pal.setColor(QPalette.Highlight, QColor(52, 120, 200))
     pal.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
     pal.setColor(QPalette.Disabled, QPalette.Text, QColor(120, 120, 120))
     pal.setColor(QPalette.Disabled, QPalette.ButtonText, QColor(120, 120, 120))
     app.setPalette(pal)
+    app.setStyleSheet("QToolTip { border:1px solid #3a3f48; padding:4px; }")
 
 
 def main(argv=None):
     argv = sys.argv if argv is None else argv
+    if sys.platform == "win32":  # own taskbar icon instead of the python one
+        try:
+            import ctypes
+
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ProView.STLViewer")
+        except Exception:  # noqa: BLE001
+            pass
     app = QApplication.instance() or QApplication(argv)
     app.setApplicationName("ProView")
+    app.setWindowIcon(app_icon())
     settings = QSettings("ProView", "ProView")
     set_language("en")
     _apply_dark_theme(app)

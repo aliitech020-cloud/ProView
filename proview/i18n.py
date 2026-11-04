@@ -24,6 +24,17 @@ _STRINGS = {
     "view_right": ("Right", "يمين"),
     "view_top": ("Top", "علوي"),
     "view_bottom": ("Bottom", "سفلي"),
+    "view_iso": ("Isometric", "منظور"),
+    "scan_colors": ("Show scan colors (PLY)", "إظهار ألوان المسح"),
+    "scan_colors_row": ("Show this model's scan colors", "إظهار ألوان هذا النموذج"),
+    "toggle_visible": ("Show / hide", "إظهار / إخفاء"),
+    "drag_panel": ("Drag to move the panel", "اسحب لتحريك اللوحة"),
+    "tile_cut": ("Cut", "قطع"),
+    "tile_align": ("Align", "محاذاة"),
+    "tile_merge": ("Merge", "دمج"),
+    "tile_colors": ("Colors", "ألوان"),
+    "tile_edges": ("Edges", "حواف"),
+    "tile_fit": ("Fit", "ملاءمة"),
     "wireframe": ("Show edges", "إظهار الحواف"),
     "parallel": ("Orthographic projection", "إسقاط متعامد"),
     "tool_cut": ("Cut", "قطع"),
@@ -115,7 +126,8 @@ _STRINGS = {
     "models_tip": ("Ctrl/Shift + click to select several models (for Merge).", "Ctrl + نقر لتحديد عدة نماذج."),
     "drop_hint": ("Open or drag & drop STL / PLY files here", "افتح ملفات STL أو اسحبها وأفلتها هنا"),
     "shortcut_text": (
-        "Ctrl+O  Open\nCtrl+S  Save model\nCtrl+Z  Undo\nX  Cut tool\nA  Alignment tool\nM  Merge models\nE  Show edges\n"
+        "Ctrl+O  Open\nCtrl+S  Save model\nCtrl+Z  Undo\nX  Cut tool\nA  Alignment tool\nM  Merge models\nE  Show edges\nC  Scan colors\n"
+        "1-6  Front / Back / Left / Right / Top / Bottom,  0  Isometric\nClick a face of the view cube to look at it\n"
         "B / L / P  Brush / Lasso / Points\nDel  Delete selection\nEsc  Cancel / clear selection\n"
         "Enter  Close points polyline\nBackspace  Remove last point\n[ ]  Brush size\nF  Fit all",
         "Ctrl+O  فتح\nCtrl+S  حفظ النموذج\nCtrl+Z  تراجع\nX  أداة القطع\nA  أداة المحاذاة\n"

@@ -30,6 +30,13 @@ _ICONS = {
     "merge": f'<circle cx="9" cy="12" r="6" stroke="{ACCENT}"/><circle cx="15" cy="12" r="6" stroke="{GREEN}"/>'
              '<path d="M12 7.2a6 6 0 0 1 0 9.6a6 6 0 0 1 0-9.6Z" fill="#e3e6ec" fill-opacity="0.55" stroke="none"/>',
     "edges": '<path d="M3 20 12 4l9 16Z"/><path d="M7.5 12h9M12 20l-4.5-8M12 20l4.5-8"/>',
+    "eye": '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>',
+    "eye_off": '<path d="M3 3l18 18M10.6 6.1A9.6 9.6 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.9 3.6M6.4 7.4A16.5 16.5 0 0 0 2.5 12s3.5 6 9.5 6a9 9 0 0 0 4.6-1.3M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+    "scan_colors": f'<path d="M12 3 4 7.5v9L12 21l8-4.5v-9Z"/><path d="M12 12 4 7.5M12 12l8-4.5M12 12v9"/>'
+                   f'<path d="M12 3 4 7.5 12 12Z" fill="{RED}" fill-opacity="0.8" stroke="none"/>'
+                   f'<path d="M12 3l8 4.5L12 12Z" fill="{GREEN}" fill-opacity="0.8" stroke="none"/>'
+                   f'<path d="M12 12v9l8-4.5v-9Z" fill="{ACCENT}" fill-opacity="0.8" stroke="none"/>',
+    "help": '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.8-2.5 2.3-2.5 3.8M12 17.2h0"/>',
     "remove": '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
     "color": '<path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.8 1.8-1.7 0-1.3-1-1.6-1-2.6 0-1 .8-1.7 1.8-1.7H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3Z"/>'
              f'<circle cx="7.5" cy="11" r="1.3" fill="{RED}" stroke="none"/>'
@@ -101,3 +108,48 @@ def icon(name: str) -> QIcon:
             ic.addPixmap(pm)
         _cache[name] = ic
     return _cache[name]
+
+
+APP_ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2a4a"/>
+      <stop offset="1" stop-color="#0a1222"/>
+    </linearGradient>
+    <linearGradient id="tooth" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cfe3f7"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2fd4c6"/>
+      <stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <rect x="8.5" y="8.5" width="239" height="239" rx="55.5" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="2"/>
+  <ellipse cx="128" cy="134" rx="98" ry="34" fill="none" stroke="url(#ring)" stroke-width="9"
+           stroke-linecap="round" stroke-dasharray="420 200" transform="rotate(-18 128 134)"/>
+  <path d="M92 52c-22 0-35 17-35 40 0 25 11 40 18 68 4 17 8 40 22 40 13 0 13-26 20-44 3-8 6-11 11-11s8 3 11 11c7 18 7 44 20 44 14 0 18-23 22-40 7-28 18-43 18-68 0-23-13-40-35-40-15 0-24 8-36 8s-21-8-36-8z"
+        fill="url(#tooth)"/>
+  <path d="M92 52c-22 0-35 17-35 40 0 25 11 40 18 68 4 17 8 40 22 40 13 0 13-26 20-44 3-8 6-11 11-11s8 3 11 11c7 18 7 44 20 44 14 0 18-23 22-40 7-28 18-43 18-68 0-23-13-40-35-40-15 0-24 8-36 8s-21-8-36-8z"
+        fill="none" stroke="#0a1222" stroke-opacity="0.25" stroke-width="3"/>
+  <ellipse cx="128" cy="134" rx="98" ry="34" fill="none" stroke="url(#ring)" stroke-width="9"
+           stroke-linecap="round" stroke-dasharray="0 250 170 200" transform="rotate(-18 128 134)"/>
+  <circle cx="214" cy="96" r="9" fill="#2fd4c6"/>
+</svg>"""
+
+
+def app_icon() -> QIcon:
+    if "__app__" not in _cache:
+        renderer = QSvgRenderer(QByteArray(APP_ICON_SVG.encode()))
+        ic = QIcon()
+        for size in (16, 24, 32, 48, 64, 128, 256):
+            pm = QPixmap(size, size)
+            pm.fill(Qt.transparent)
+            p = QPainter(pm)
+            p.setRenderHint(QPainter.Antialiasing)
+            renderer.render(p)
+            p.end()
+            ic.addPixmap(pm)
+        _cache["__app__"] = ic
+    return _cache["__app__"]
