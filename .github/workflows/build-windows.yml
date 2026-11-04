@@ -107,6 +107,7 @@ jobs:
           New-Item -ItemType Directory smoke -Force | Out-Null
           Copy-Item -Recurse dist/ProView smoke/app
           $main = Run-Exe "smoke\app" "default" @{}
+          Run-Exe "smoke\app" "gc_on" @{ PROVIEW_GC = "1" } | Out-Null
           if ($main -ne 0) { exit 1 }
 
       - name: Upload smoke test result

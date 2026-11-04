@@ -1,6 +1,7 @@
 """Main window."""
 from __future__ import annotations
 
+import gc
 import os
 import sys
 
@@ -499,6 +500,11 @@ def main(argv=None):
     from . import diagnostics
 
     argv = sys.argv if argv is None else argv
+    # Python's cyclic garbage collector crashed the Windows build (access violation
+    # while "Garbage-collecting", at random points during start-up). Normal reference
+    # counting still frees memory, so the cycle collector is switched off.
+    if not os.environ.get("PROVIEW_GC"):
+        gc.disable()
     diagnostics.setup()
     diagnostics.log("starting")
     if sys.platform == "win32":  # own taskbar icon instead of the python one
