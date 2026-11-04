@@ -173,7 +173,9 @@ class ModelsPanel(QFrame):
         self.list.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.list.setToolTip(tr("models_tip"))
-        self.list.currentRowChanged.connect(on_select)
+        # Connect through plain lambdas: connecting a signal straight to a bound method of the
+        # (still constructing) main window crashes PySide6 on Windows.
+        self.list.currentRowChanged.connect(lambda row: on_select(row))
         lay.addWidget(self.list)
         self.empty = QLabel(tr("drop_hint"))
         self.empty.setWordWrap(True)
@@ -183,10 +185,10 @@ class ModelsPanel(QFrame):
         row = QHBoxLayout()
         b = QPushButton(icon("merge"), tr("merge"))
         b.setToolTip(tr("merge_tip"))
-        b.clicked.connect(on_merge)
+        b.clicked.connect(lambda _=False: on_merge())
         row.addWidget(b)
         b = QPushButton(icon("remove"), tr("remove_model"))
-        b.clicked.connect(on_remove)
+        b.clicked.connect(lambda _=False: on_remove())
         row.addWidget(b)
         lay.addLayout(row)
         self.info = QLabel(tr("no_model"))
