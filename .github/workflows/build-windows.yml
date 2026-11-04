@@ -87,22 +87,43 @@ jobs:
 
       - name: Smoke test exe
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          New-Item -ItemType Directory smoke -Force | Out-Null
-          Copy-Item -Recurse dist/ProView smoke/
           $gl = Get-ChildItem -Recurse mesa -Filter opengl32.dll | Where-Object { $_.FullName -match "x64" } | Select-Object -First 1
-          if ($gl) {
-            Write-Host "Using Mesa from $($gl.DirectoryName)"
-            Copy-Item "$($gl.DirectoryName)\*.dll" smoke/ProView/
-          } else { Write-Host "Mesa opengl32.dll not found" }
           $env:GALLIUM_DRIVER = "llvmpipe"
-          $p = Start-Process -FilePath smoke/ProView/ProView.exe -ArgumentList "--selftest", "$pwd\smoke\selftest.png" -PassThru
-          if (-not $p.WaitForExit(240000)) { $p.Kill(); Write-Host "TIMEOUT" }
-          Write-Host "exit code: $($p.ExitCode)"
-          $log = "$env:LOCALAPPDATA\ProView\proview.log"
-          if (Test-Path $log) { Get-Content $log; Copy-Item $log smoke/ }
-          if (Test-Path "$log.vtk.txt") { Get-Content "$log.vtk.txt"; Copy-Item "$log.vtk.txt" smoke/ }
-          if ($p.ExitCode -ne 0) { exit 1 }
+          function Run-Exe($dir, $label, $vars) {
+            if ($gl) { Copy-Item "$($gl.DirectoryName)\*.dll" $dir -Force }
+            foreach ($k in $vars.Keys) { Set-Item "env:$k" $vars[$k] }
+            $logf = "$env:LOCALAPPDATA\ProView\proview.log"
+            if (Test-Path $logf) { Remove-Item $logf }
+            $p = Start-Process -FilePath "$dir\ProView.exe" -ArgumentList "--selftest", "$pwd\smoke\$label.png" -PassThru
+            if (-not $p.WaitForExit(150000)) { $p.Kill(); Write-Host "TIMEOUT" }
+            foreach ($k in $vars.Keys) { Remove-Item "env:$k" }
+            Write-Host "=============== $label -> exit code $($p.ExitCode)"
+            if (Test-Path $logf) { Get-Content $logf | Select-Object -Last 25 | Out-Host; Copy-Item $logf "smoke\$label.log" }
+            return $p.ExitCode
+          }
+          New-Item -ItemType Directory smoke -Force | Out-Null
+          Copy-Item -Recurse dist/ProView smoke/app
+          $main = Run-Exe "smoke\app" "default" @{}
+          Run-Exe "smoke\app" "no_cube" @{ PROVIEW_NO_CUBE = "1" } | Out-Null
+          Run-Exe "smoke\app" "panel_child" @{ PROVIEW_PANEL_CHILD = "1" } | Out-Null
+          Run-Exe "smoke\app" "msaa" @{ PROVIEW_MSAA = "1" } | Out-Null
+          Run-Exe "smoke\app" "no_init" @{ PROVIEW_NO_INIT = "1" } | Out-Null
+          Run-Exe "smoke\app" "all_off" @{ PROVIEW_NO_CUBE = "1"; PROVIEW_PANEL_CHILD = "1"; PROVIEW_MSAA = "1"; PROVIEW_NO_INIT = "1" } | Out-Null
+          # control: the build from run #2 that worked on the user's PC (just open it and close it)
+          gh run download 41855330166 -R ${{ github.repository }} -n ProView-windows -D old_build
+          if (Test-Path old_build) {
+            Get-ChildItem -Recurse old_build -Filter *.zip | ForEach-Object { Expand-Archive $_.FullName -DestinationPath old_build/x -Force }
+            $old = Get-ChildItem -Recurse old_build/x -Filter ProView.exe | Select-Object -First 1
+            if ($gl) { Copy-Item "$($gl.DirectoryName)\*.dll" $old.DirectoryName -Force }
+            $p = Start-Process -FilePath $old.FullName -PassThru
+            Start-Sleep -Seconds 15
+            Write-Host "=============== old build #2 alive after 15 s: $(-not $p.HasExited) (exit code $($p.ExitCode))"
+            if (-not $p.HasExited) { $p.Kill() }
+          }
+          if ($main -ne 0) { exit 1 }
 
       - name: Upload smoke test result
         if: always()

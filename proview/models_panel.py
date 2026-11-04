@@ -138,7 +138,10 @@ class ModelsPanel(QFrame):
     """Always-floating panel that follows the 3D view (top-left corner by default)."""
 
     def __init__(self, window, viewer, on_change, on_merge, on_remove, on_select):
-        super().__init__(window, Qt.Tool | Qt.FramelessWindowHint)
+        import os
+
+        flags = Qt.Widget if os.environ.get("PROVIEW_PANEL_CHILD") else Qt.Tool | Qt.FramelessWindowHint
+        super().__init__(window, flags)
         self.window_ = window
         self.viewer = viewer
         self.on_change = on_change

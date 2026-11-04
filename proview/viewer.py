@@ -1,6 +1,8 @@
 """VTK 3D view embedded in Qt, with a tool-aware interactor style."""
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import vtkmodules.qt
 
@@ -159,11 +161,31 @@ class Overlay2D:
         self.renderer.RemoveViewProp(self.actor)
 
 
+class _NoCube:
+    """Stand-in when the view cube is disabled (diagnostics)."""
+
+    class _R:
+        def GetDraw(self):
+            return 0
+
+    ren = _R()
+
+    def hit(self, x, y):
+        return None
+
+    def hover(self, x, y):
+        return False
+
+    def set_visible(self, on):
+        pass
+
+
 class Viewer(QVTKRenderWindowInteractor):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.rw = self.GetRenderWindow()
-        self.rw.SetMultiSamples(0)  # MSAA breaks depth peeling (transparency); FXAA is used instead
+        # MSAA breaks depth peeling (transparency); FXAA is used instead
+        self.rw.SetMultiSamples(4 if os.environ.get("PROVIEW_MSAA") else 0)
         self.rw.SetAlphaBitPlanes(1)
         self.ren = self._make_renderer()
         self.rw.AddRenderer(self.ren)
@@ -180,10 +202,11 @@ class Viewer(QVTKRenderWindowInteractor):
         from .diagnostics import log
 
         log("viewer: renderer ready")
-        self.cube = ViewCube(self)
+        self.cube = _NoCube() if os.environ.get("PROVIEW_NO_CUBE") else ViewCube(self)
         log("viewer: view cube ready")
         self._anim = None
-        self.Initialize()
+        if not os.environ.get("PROVIEW_NO_INIT"):
+            self.Initialize()
 
     @staticmethod
     def _make_renderer():
@@ -194,7 +217,8 @@ class Viewer(QVTKRenderWindowInteractor):
         ren.SetUseDepthPeeling(1)
         ren.SetMaximumNumberOfPeels(8)
         ren.SetOcclusionRatio(0.0)
-        ren.UseFXAAOn()
+        if not os.environ.get("PROVIEW_MSAA"):
+            ren.UseFXAAOn()
         return ren
 
     # --------------------------------------------------------------- scene
