@@ -64,3 +64,41 @@ jobs:
           files: |
             installer_out/*.exe
             ProView-portable.zip
+
+      # ---- run the real exe on Windows (software OpenGL via Mesa, the runner has no GPU)
+      - name: Get Mesa software OpenGL
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download -R pal1000/mesa-dist-win --pattern "mesa3d-*-release-msvc.7z" -O mesa.7z
+          7z x mesa.7z -omesa -y | Out-Null
+          Get-ChildItem mesa/x64 | Select-Object Name
+
+      - name: Smoke test exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory smoke -Force | Out-Null
+          Copy-Item -Recurse dist/ProView smoke/
+          foreach ($dll in "opengl32.dll", "libgallium_wgl.dll", "libglapi.dll") {
+            if (Test-Path "mesa/x64/$dll") { Copy-Item "mesa/x64/$dll" smoke/ProView/ }
+          }
+          $env:GALLIUM_DRIVER = "llvmpipe"
+          $p = Start-Process -FilePath smoke/ProView/ProView.exe -ArgumentList "--selftest", "$pwd\smoke\selftest.png" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); Write-Host "TIMEOUT" }
+          Write-Host "exit code: $($p.ExitCode)"
+          $log = "$env:LOCALAPPDATA\ProView\proview.log"
+          if (Test-Path $log) { Get-Content $log; Copy-Item $log smoke/ }
+          if (Test-Path "$log.vtk.txt") { Get-Content "$log.vtk.txt"; Copy-Item "$log.vtk.txt" smoke/ }
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      - name: Upload smoke test result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test
+          path: |
+            smoke/*.png
+            smoke/*.log
+            smoke/*.txt

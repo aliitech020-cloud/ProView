@@ -496,7 +496,11 @@ def _apply_dark_theme(app: QApplication):
 
 
 def main(argv=None):
+    from . import diagnostics
+
     argv = sys.argv if argv is None else argv
+    diagnostics.setup()
+    diagnostics.log("starting")
     if sys.platform == "win32":  # own taskbar icon instead of the python one
         try:
             import ctypes
@@ -505,13 +509,22 @@ def main(argv=None):
         except Exception:  # noqa: BLE001
             pass
     app = QApplication.instance() or QApplication(argv)
+    diagnostics.log("QApplication created")
+    diagnostics.route_vtk_messages()
     app.setApplicationName("ProView")
     app.setWindowIcon(app_icon())
     settings = QSettings("ProView", "ProView")
     set_language("en")
     _apply_dark_theme(app)
     win = MainWindow(settings)
+    diagnostics.log("main window created")
     win.show()
+    diagnostics.log("main window shown")
+    if "--selftest" in argv:
+        i = argv.index("--selftest")
+        out = argv[i + 1] if len(argv) > i + 1 else "selftest.png"
+        QTimer.singleShot(1500, lambda: diagnostics.run_selftest(win, app, out))
+        return app.exec()
     files = [a for a in argv[1:] if a.lower().endswith(MESH_EXTENSIONS) and os.path.isfile(a)]
     if files:
         win.open_files(files)
