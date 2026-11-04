@@ -147,9 +147,6 @@ class MainWindow(QMainWindow):
         mv.addAction(self.a_edges)
         a_par = self._act(tr("parallel"), self.viewer.set_parallel, checkable=True)
         mv.addAction(a_par)
-        lm = mv.addMenu(tr("menu_language"))
-        lm.addAction(self._act("English", lambda: self._set_lang("en")))
-        lm.addAction(self._act("العربية", lambda: self._set_lang("ar")))
 
         self.a_cut = self._act(tr("tool_cut"), self._toggle_cut, "X", checkable=True)
         self.a_align = self._act(tr("tool_align"), self._toggle_align, "A", checkable=True)
@@ -448,10 +445,7 @@ def main(argv=None):
     app = QApplication.instance() or QApplication(argv)
     app.setApplicationName("ProView")
     settings = QSettings("ProView", "ProView")
-    lang = str(settings.value("lang", "ar"))
-    set_language(lang)
-    if lang == "ar":
-        app.setLayoutDirection(Qt.RightToLeft)
+    set_language("en")
     _apply_dark_theme(app)
     win = MainWindow(settings)
     win.show()
