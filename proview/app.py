@@ -538,13 +538,28 @@ def main(argv=None):
 
 
 def _exit_now(code: int, settings: QSettings) -> None:
-    """Leave without Python's shutdown garbage collection (it crashes on Windows, see gc.disable)."""
+    """Leave without Python's shutdown clean-up and DLL unloading (both crash on Windows)."""
     from . import diagnostics
 
     settings.sync()
+    for w in QApplication.topLevelWidgets():  # release the OpenGL context while everything is alive
+        viewer = getattr(w, "viewer", None)
+        if viewer is not None:
+            try:
+                viewer.Finalize()
+            except Exception:  # noqa: BLE001
+                pass
     diagnostics.log(f"exit {code}")
-    sys.stdout.flush() if sys.stdout else None
-    sys.stderr.flush() if sys.stderr else None
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except Exception:  # noqa: BLE001
+            pass
+    if sys.platform == "win32":
+        import ctypes
+
+        k32 = ctypes.windll.kernel32
+        k32.TerminateProcess(k32.GetCurrentProcess(), int(code) & 0xFFFFFFFF)
     os._exit(int(code))
 
 
