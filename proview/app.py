@@ -5,9 +5,10 @@ import os
 import sys
 
 import numpy as np
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QSettings, QSize, Qt
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence, QPalette, QShortcut
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QColorDialog,
     QDockWidget,
@@ -29,7 +30,8 @@ from . import __version__
 from .align_tool import AlignController, AlignPanel
 from .cut_tool import BRUSH, LASSO, POLYGON, CutPanel, CutTool
 from .i18n import set_language, tr
-from .mesh import load_stl, merge_meshes, save_stl
+from .icons import icon
+from .mesh import MESH_EXTENSIONS, load_mesh, merge_meshes, save_mesh
 from .model import Model
 from .viewer import Viewer
 
@@ -66,14 +68,20 @@ class MainWindow(QMainWindow):
         w = QWidget()
         lay = QVBoxLayout(w)
         self.model_list = QListWidget()
+        self.model_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.model_list.setToolTip(tr("models_tip"))
         self.model_list.currentRowChanged.connect(self._model_selected)
         self.model_list.itemChanged.connect(self._model_item_changed)
         lay.addWidget(self.model_list)
         row = QHBoxLayout()
-        self.color_btn = QPushButton(tr("color"))
+        self.color_btn = QPushButton(icon("color"), tr("color"))
         self.color_btn.clicked.connect(self._pick_color)
         row.addWidget(self.color_btn)
-        rm = QPushButton(tr("remove_model"))
+        merge_btn = QPushButton(icon("merge"), tr("merge"))
+        merge_btn.setToolTip(tr("merge_tip"))
+        merge_btn.clicked.connect(self.merge_models)
+        row.addWidget(merge_btn)
+        rm = QPushButton(icon("remove"), tr("remove_model"))
         rm.clicked.connect(self._remove_model)
         row.addWidget(rm)
         lay.addLayout(row)
@@ -104,10 +112,15 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self.tools_dock)
         self.tools_dock.hide()
 
-    def _act(self, text, slot, shortcut=None, checkable=False):
+    def _act(self, text, slot, shortcut=None, checkable=False, icon_name=None):
         a = QAction(text, self)
+        if icon_name:
+            a.setIcon(icon(icon_name))
+        tip = text.replace("...", "")
         if shortcut:
             a.setShortcut(QKeySequence(shortcut))
+            tip += f"  ({QKeySequence(shortcut).toString(QKeySequence.NativeText)})"
+        a.setToolTip(tip)
         a.setCheckable(checkable)
         if checkable:
             a.toggled.connect(slot)
@@ -119,37 +132,40 @@ class MainWindow(QMainWindow):
         mb = self.menuBar()
         tb = self.addToolBar("main")
         tb.setObjectName("main_toolbar")
-        tb.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        tb.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        tb.setIconSize(QSize(26, 26))
+        tb.setMovable(False)
 
-        a_open = self._act(tr("open"), self.open_dialog, QKeySequence.Open)
-        a_save = self._act(tr("save"), self.save_model, QKeySequence.Save)
-        a_merge = self._act(tr("save_merged"), self.save_merged)
+        a_open = self._act(tr("open"), self.open_dialog, QKeySequence.Open, icon_name="open")
+        a_save = self._act(tr("save"), self.save_model, QKeySequence.Save, icon_name="save")
+        a_export = self._act(tr("save_merged"), self.save_merged)
+        a_merge = self._act(tr("merge"), self.merge_models, "M", icon_name="merge")
         a_exit = self._act(tr("exit"), self.close)
         m = mb.addMenu(tr("menu_file"))
-        for a in (a_open, a_save, a_merge):
+        for a in (a_open, a_save, a_export):
             m.addAction(a)
         m.addSeparator()
         m.addAction(a_exit)
 
-        a_undo = self._act(tr("undo"), self.undo, QKeySequence.Undo)
+        a_undo = self._act(tr("undo"), self.undo, QKeySequence.Undo, icon_name="undo")
         mb.addMenu(tr("menu_edit")).addAction(a_undo)
 
         mv = mb.addMenu(tr("menu_view"))
-        a_fit = self._act(tr("reset_view"), self.viewer.fit, "F")
+        a_fit = self._act(tr("reset_view"), self.viewer.fit, "F", icon_name="fit")
         mv.addAction(a_fit)
         view_actions = []
         for name in ("front", "back", "left", "right", "top", "bottom"):
-            a = self._act(tr("view_" + name), lambda n=name: self.viewer.set_view(n))
+            a = self._act(tr("view_" + name), lambda n=name: self.viewer.set_view(n), icon_name="view_" + name)
             mv.addAction(a)
             view_actions.append(a)
         mv.addSeparator()
-        self.a_edges = self._act(tr("wireframe"), self._toggle_edges, "E", checkable=True)
+        self.a_edges = self._act(tr("wireframe"), self._toggle_edges, "E", checkable=True, icon_name="edges")
         mv.addAction(self.a_edges)
         a_par = self._act(tr("parallel"), self.viewer.set_parallel, checkable=True)
         mv.addAction(a_par)
 
-        self.a_cut = self._act(tr("tool_cut"), self._toggle_cut, "X", checkable=True)
-        self.a_align = self._act(tr("tool_align"), self._toggle_align, "A", checkable=True)
+        self.a_cut = self._act(tr("tool_cut"), self._toggle_cut, "X", checkable=True, icon_name="cut")
+        self.a_align = self._act(tr("tool_align"), self._toggle_align, "A", checkable=True, icon_name="align")
         grp = QActionGroup(self)
         grp.setExclusionPolicy(QActionGroup.ExclusionPolicy.ExclusiveOptional)
         grp.addAction(self.a_cut)
@@ -157,6 +173,7 @@ class MainWindow(QMainWindow):
         mt = mb.addMenu(tr("menu_tools"))
         mt.addAction(self.a_cut)
         mt.addAction(self.a_align)
+        mt.addAction(a_merge)
 
         mh = mb.addMenu(tr("menu_help"))
         mh.addAction(self._act(tr("shortcuts"), lambda: QMessageBox.information(self, tr("shortcuts"), tr("shortcut_text"))))
@@ -168,9 +185,11 @@ class MainWindow(QMainWindow):
         tb.addAction(a_fit)
         for a in view_actions:
             tb.addAction(a)
+        tb.addAction(self.a_edges)
         tb.addSeparator()
         tb.addAction(self.a_cut)
         tb.addAction(self.a_align)
+        tb.addAction(a_merge)
 
     def _build_shortcuts(self):
         def sc(key, fn):
@@ -198,7 +217,7 @@ class MainWindow(QMainWindow):
         return None
 
     def open_dialog(self):
-        paths, _ = QFileDialog.getOpenFileNames(self, tr("open"), self._last_dir, tr("stl_filter"))
+        paths, _ = QFileDialog.getOpenFileNames(self, tr("open"), self._last_dir, tr("mesh_filter"))
         self.open_files(paths)
 
     def open_files(self, paths):
@@ -206,21 +225,14 @@ class MainWindow(QMainWindow):
         try:
             for p in paths:
                 try:
-                    mesh = load_stl(p)
+                    mesh = load_mesh(p)
                 except Exception as exc:  # noqa: BLE001
                     QApplication.restoreOverrideCursor()
                     QMessageBox.warning(self, tr("error"), tr("load_failed", path=p, err=exc))
                     QApplication.setOverrideCursor(Qt.WaitCursor)
                     continue
                 name = os.path.splitext(os.path.basename(p))[0]
-                model = Model(name, mesh, path=p)
-                model.set_edges(self.a_edges.isChecked())
-                self.viewer.add_model(model, fit=True)
-                item = QListWidgetItem(name)
-                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                item.setCheckState(Qt.Checked)
-                self.model_list.addItem(item)
-                self.model_list.setCurrentRow(self.model_list.count() - 1)
+                self._add_model(Model(name, mesh, path=p))
                 self._last_dir = os.path.dirname(p)
                 self.settings.setValue("last_dir", self._last_dir)
                 self.statusBar().showMessage(tr("loaded", name=name, faces=mesh.n_faces))
@@ -228,6 +240,38 @@ class MainWindow(QMainWindow):
             QApplication.restoreOverrideCursor()
         self.align_panel.refresh_models()
         self._update_info()
+
+    def _add_model(self, model: Model):
+        model.set_edges(self.a_edges.isChecked())
+        self.viewer.add_model(model, fit=True)
+        item = QListWidgetItem(model.name)
+        item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+        item.setCheckState(Qt.Checked)
+        self.model_list.addItem(item)
+        self.model_list.setCurrentRow(self.model_list.count() - 1)
+
+    def merge_models(self):
+        """Combine the selected models (or all visible ones) into one new model."""
+        rows = sorted({self.model_list.row(i) for i in self.model_list.selectedItems()})
+        parts = [self.viewer.models[r] for r in rows]
+        if len(parts) < 2:
+            parts = [m for m in self.viewer.models if m.visible]
+        if len(parts) < 2:
+            QMessageBox.information(self, tr("merge"), tr("merge_need"))
+            return
+        self.cut.cancel()
+        self.align.stop_picking()
+        for m in parts:
+            m.clear_selection()
+        mesh = merge_meshes([m.mesh.transformed(m.matrix) for m in parts])
+        names = [m.name for m in parts]
+        name = "Merged - " + " + ".join(names) if len(" + ".join(names)) < 60 else f"Merged ({len(parts)} models)"
+        for m in parts:
+            self.model_list.item(self.viewer.models.index(m)).setCheckState(Qt.Unchecked)
+        self._add_model(Model(name, mesh, color=parts[0].color))
+        self.align_panel.refresh_models()
+        self._update_info()
+        self.statusBar().showMessage(tr("merge_done", n=len(parts), faces=mesh.n_faces))
 
     def _model_selected(self, row):
         m = self.active_model()
@@ -294,9 +338,9 @@ class MainWindow(QMainWindow):
     # ============================================================ saving
     def _ask_save_path(self, default_name):
         start = os.path.join(self._last_dir or "", default_name + ".stl")
-        path, _ = QFileDialog.getSaveFileName(self, tr("save"), start, tr("stl_filter"))
-        if path and not path.lower().endswith(".stl"):
-            path += ".stl"
+        path, chosen = QFileDialog.getSaveFileName(self, tr("save"), start, tr("save_filter"))
+        if path and not path.lower().endswith(MESH_EXTENSIONS):
+            path += ".ply" if "ply" in chosen.lower() else ".stl"
         return path
 
     def save_model(self):
@@ -306,7 +350,7 @@ class MainWindow(QMainWindow):
             return
         path = self._ask_save_path(m.name)
         if path:
-            save_stl(path, m.mesh, m.matrix)
+            save_mesh(path, m.mesh, m.matrix)
             self.statusBar().showMessage(tr("saved", path=path))
 
     def save_merged(self):
@@ -315,7 +359,7 @@ class MainWindow(QMainWindow):
             return
         path = self._ask_save_path("merged")
         if path:
-            save_stl(path, merge_meshes([m.mesh.transformed(m.matrix) for m in visible]))
+            save_mesh(path, merge_meshes([m.mesh.transformed(m.matrix) for m in visible]))
             self.statusBar().showMessage(tr("saved", path=path))
 
     # ============================================================== undo
@@ -411,7 +455,7 @@ class MainWindow(QMainWindow):
             ev.acceptProposedAction()
 
     def dropEvent(self, ev):
-        paths = [u.toLocalFile() for u in ev.mimeData().urls() if u.toLocalFile().lower().endswith(".stl")]
+        paths = [u.toLocalFile() for u in ev.mimeData().urls() if u.toLocalFile().lower().endswith(MESH_EXTENSIONS)]
         if paths:
             self.open_files(paths)
 
@@ -449,7 +493,7 @@ def main(argv=None):
     _apply_dark_theme(app)
     win = MainWindow(settings)
     win.show()
-    files = [a for a in argv[1:] if a.lower().endswith(".stl") and os.path.isfile(a)]
+    files = [a for a in argv[1:] if a.lower().endswith(MESH_EXTENSIONS) and os.path.isfile(a)]
     if files:
         win.open_files(files)
     return app.exec()

@@ -122,3 +122,36 @@ def test_selection_helpers():
     assert points_in_polygon(pts, poly).tolist() == [True, False, False, True]
     d = segment_distance(np.array([[0, 1], [5, 3], [12, 0]], float), np.array([0, 0.0]), np.array([10, 0.0]))
     assert np.allclose(d, [1, 3, 2])
+
+
+def test_ply_roundtrip_and_formats():
+    from proview.mesh import load_mesh, save_mesh
+
+    m = bumpy_mesh()
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "a.ply")
+        save_mesh(p, m)
+        m2 = load_mesh(p)
+        assert m2.n_faces == m.n_faces and np.allclose(m2.vertices, m.vertices, atol=1e-4)
+        # ascii with a quad, extra vertex props and a big-endian binary with colors
+        with open(os.path.join(d, "q.ply"), "w") as fh:
+            fh.write("ply\nformat ascii 1.0\nelement vertex 4\nproperty float x\nproperty float y\n"
+                     "property float z\nproperty uchar red\nelement face 1\n"
+                     "property list uchar int vertex_indices\nend_header\n"
+                     "0 0 0 255\n1 0 0 255\n1 1 0 255\n0 1 0 255\n4 0 1 2 3\n")
+        q = load_mesh(os.path.join(d, "q.ply"))
+        assert q.n_faces == 2 and q.n_vertices == 4
+        vdt = np.dtype([("x", ">f4"), ("y", ">f4"), ("z", ">f4"), ("red", "u1"), ("green", "u1"), ("blue", "u1")])
+        v = np.zeros(m.n_vertices, vdt)
+        v["x"], v["y"], v["z"] = m.vertices.T
+        fdt = np.dtype([("n", "u1"), ("i", ">i4", (3,))])
+        f = np.zeros(m.n_faces, fdt)
+        f["n"], f["i"] = 3, m.faces
+        with open(os.path.join(d, "b.ply"), "wb") as fh:
+            fh.write((f"ply\nformat binary_big_endian 1.0\nelement vertex {m.n_vertices}\nproperty float x\n"
+                      "property float y\nproperty float z\nproperty uchar red\nproperty uchar green\n"
+                      f"property uchar blue\nelement face {m.n_faces}\nproperty list uchar int vertex_indices\n"
+                      "end_header\n").encode())
+            fh.write(v.tobytes() + f.tobytes())
+        b = load_mesh(os.path.join(d, "b.ply"))
+        assert b.n_faces == m.n_faces and np.allclose(b.vertices, m.vertices, atol=1e-4)

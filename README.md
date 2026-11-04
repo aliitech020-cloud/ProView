@@ -28,7 +28,10 @@
 - **Auto alignment**: محاذاة تلقائية بدون نقاط.
 - **محاذاة كل النماذج الظاهرة** على النموذج الثابت دفعة واحدة.
 
-بعد الانتهاء احفظ النموذج من **ملف ← حفظ النموذج باسم** (يتم حفظ الوضع الجديد بعد المحاذاة والقطع)، أو صدّر كل النماذج كملف واحد.
+### 3. الدمج (Merge) — زر `M`
+حدد نموذجين أو أكثر في القائمة (Ctrl + نقر) ثم اضغط **Merge**، فيتم إنشاء نموذج واحد جديد وتُخفى النماذج الأصلية. إذا لم تحدد شيئًا يتم دمج كل النماذج الظاهرة.
+
+يدعم البرنامج ملفات **STL** و **PLY** للفتح والحفظ. بعد الانتهاء احفظ النموذج من **File ← Save model as** (يتم حفظ الوضع الجديد بعد المحاذاة والقطع).
 
 ### التحكم بالعرض
 الزر الأيمن: تدوير — الزر الأوسط: تحريك — العجلة: تكبير/تصغير — `F`: ملاءمة الكل. يمكن سحب ملفات STL وإفلاتها داخل البرنامج.
@@ -47,6 +50,10 @@
 A Windows desktop STL viewer (Python, Qt/PySide6, VTK) with:
 
 **Cut tool (`X`)** — exocad-style region cutting. Select with a **brush** (`B`), **freehand lasso** (`L`) or **connected points** (`P`, click points on the model, close on the first point / double-click / Enter; you can rotate between clicks). Delete with the **Delete key** or the button. Ctrl inverts the action (deselect). Only visible faces are selected unless *Cut through* is enabled. Also: keep selection, invert, grow/shrink, remove small loose parts, undo (`Ctrl+Z`).
+
+**Merge (`M`)** — Ctrl/Shift-click several models in the list and press Merge to combine them into one new model (originals are hidden). With no multi-selection, all visible models are merged.
+
+**File formats** — open and save **STL** and **PLY** (ASCII and binary).
 
 **Alignment tool (`A`)** — choose a fixed and a floating model, then:
 - **Point pairs** in a split view (left fixed, right floating), ≥ 3 pairs → Kabsch alignment, optionally refined by best-fit.

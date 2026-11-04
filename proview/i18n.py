@@ -12,7 +12,7 @@ _STRINGS = {
     "menu_tools": ("&Tools", "&أدوات"),
     "menu_help": ("&Help", "&مساعدة"),
     "menu_language": ("Language", "اللغة"),
-    "open": ("Open STL...", "فتح STL..."),
+    "open": ("Open model (STL / PLY)...", "فتح نموذج (STL / PLY)..."),
     "save": ("Save model as...", "حفظ النموذج باسم..."),
     "save_merged": ("Export visible models merged...", "تصدير النماذج الظاهرة كملف واحد..."),
     "exit": ("Exit", "خروج"),
@@ -100,10 +100,22 @@ _STRINGS = {
     "error": ("Error", "خطأ"),
     "load_failed": ("Could not open {path}:\n{err}", "تعذر فتح {path}:\n{err}"),
     "nothing_to_undo": ("Nothing to undo", "لا يوجد ما يمكن التراجع عنه"),
-    "stl_filter": ("STL files (*.stl);;All files (*)", "ملفات STL (*.stl);;كل الملفات (*)"),
-    "drop_hint": ("Open or drag & drop STL files here", "افتح ملفات STL أو اسحبها وأفلتها هنا"),
+    "mesh_filter": ("3D models (*.stl *.ply);;STL files (*.stl);;PLY files (*.ply);;All files (*)",
+                    "نماذج ثلاثية الأبعاد (*.stl *.ply);;STL (*.stl);;PLY (*.ply);;كل الملفات (*)"),
+    "save_filter": ("STL file (*.stl);;PLY file (*.ply)", "ملف STL (*.stl);;ملف PLY (*.ply)"),
+    "merge": ("Merge", "دمج"),
+    "merge_tip": ("Merge the selected models (Ctrl/Shift+click in the list) into one model.\n"
+                  "If fewer than two are selected, all visible models are merged.\n"
+                  "The original models are hidden, not deleted.",
+                  "دمج النماذج المحددة في نموذج واحد."),
+    "merge_need": ("Select at least two models (Ctrl+click) or show at least two models to merge.",
+                   "حدد نموذجين على الأقل للدمج."),
+    "merge_done": ("Merged {n} models into one ({faces:,} triangles). The originals are hidden.",
+                   "تم دمج {n} نماذج ({faces:,} مثلث)."),
+    "models_tip": ("Ctrl/Shift + click to select several models (for Merge).", "Ctrl + نقر لتحديد عدة نماذج."),
+    "drop_hint": ("Open or drag & drop STL / PLY files here", "افتح ملفات STL أو اسحبها وأفلتها هنا"),
     "shortcut_text": (
-        "Ctrl+O  Open\nCtrl+S  Save model\nCtrl+Z  Undo\nX  Cut tool\nA  Alignment tool\n"
+        "Ctrl+O  Open\nCtrl+S  Save model\nCtrl+Z  Undo\nX  Cut tool\nA  Alignment tool\nM  Merge models\nE  Show edges\n"
         "B / L / P  Brush / Lasso / Points\nDel  Delete selection\nEsc  Cancel / clear selection\n"
         "Enter  Close points polyline\nBackspace  Remove last point\n[ ]  Brush size\nF  Fit all",
         "Ctrl+O  فتح\nCtrl+S  حفظ النموذج\nCtrl+Z  تراجع\nX  أداة القطع\nA  أداة المحاذاة\n"
