@@ -96,7 +96,7 @@ class MainWindow(QMainWindow):
         a.setToolTip(tip)
         a.setCheckable(checkable)
         if checkable:
-            a.toggled.connect(slot)
+            a.toggled.connect(lambda on: slot(on))
         else:
             a.triggered.connect(lambda _=False: slot())
         return a
@@ -198,7 +198,7 @@ class MainWindow(QMainWindow):
     def _build_shortcuts(self):
         def sc(key, fn):
             s = QShortcut(QKeySequence(key), self)
-            s.activated.connect(fn)
+            s.activated.connect(lambda: fn())
 
         sc(Qt.Key_Delete, self._key_delete)
         sc(Qt.Key_Escape, self._key_escape)

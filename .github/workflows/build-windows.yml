@@ -107,22 +107,6 @@ jobs:
           New-Item -ItemType Directory smoke -Force | Out-Null
           Copy-Item -Recurse dist/ProView smoke/app
           $main = Run-Exe "smoke\app" "default" @{}
-          Run-Exe "smoke\app" "no_cube" @{ PROVIEW_NO_CUBE = "1" } | Out-Null
-          Run-Exe "smoke\app" "panel_child" @{ PROVIEW_PANEL_CHILD = "1" } | Out-Null
-          Run-Exe "smoke\app" "msaa" @{ PROVIEW_MSAA = "1" } | Out-Null
-          Run-Exe "smoke\app" "no_init" @{ PROVIEW_NO_INIT = "1" } | Out-Null
-          Run-Exe "smoke\app" "all_off" @{ PROVIEW_NO_CUBE = "1"; PROVIEW_PANEL_CHILD = "1"; PROVIEW_MSAA = "1"; PROVIEW_NO_INIT = "1" } | Out-Null
-          # control: the build from run #2 that worked on the user's PC (just open it and close it)
-          gh run download 41855330166 -R ${{ github.repository }} -n ProView-windows -D old_build
-          if (Test-Path old_build) {
-            Get-ChildItem -Recurse old_build -Filter *.zip | ForEach-Object { Expand-Archive $_.FullName -DestinationPath old_build/x -Force }
-            $old = Get-ChildItem -Recurse old_build/x -Filter ProView.exe | Select-Object -First 1
-            if ($gl) { Copy-Item "$($gl.DirectoryName)\*.dll" $old.DirectoryName -Force }
-            $p = Start-Process -FilePath $old.FullName -PassThru
-            Start-Sleep -Seconds 15
-            Write-Host "=============== old build #2 alive after 15 s: $(-not $p.HasExited) (exit code $($p.ExitCode))"
-            if (-not $p.HasExited) { $p.Kill() }
-          }
           if ($main -ne 0) { exit 1 }
 
       - name: Upload smoke test result

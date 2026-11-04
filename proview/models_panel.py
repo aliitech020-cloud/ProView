@@ -46,13 +46,13 @@ class ModelRow(QWidget):
         self.eye.setIconSize(QSize(18, 18))
         self.eye.setAutoRaise(True)
         self.eye.setToolTip(tr("toggle_visible"))
-        self.eye.toggled.connect(self._visible)
+        self.eye.toggled.connect(lambda on: self._visible(on))
         top.addWidget(self.eye)
 
         self.swatch = QToolButton()
         self.swatch.setFixedSize(18, 18)
         self.swatch.setToolTip(tr("color"))
-        self.swatch.clicked.connect(self._pick_color)
+        self.swatch.clicked.connect(lambda _=False: self._pick_color())
         top.addWidget(self.swatch)
 
         self.name = QLabel()
@@ -65,7 +65,7 @@ class ModelRow(QWidget):
         self.colors_btn.setCheckable(True)
         self.colors_btn.setAutoRaise(True)
         self.colors_btn.setToolTip(tr("scan_colors_row"))
-        self.colors_btn.toggled.connect(self._colors)
+        self.colors_btn.toggled.connect(lambda on: self._colors(on))
         top.addWidget(self.colors_btn)
         lay.addLayout(top)
 
@@ -75,7 +75,7 @@ class ModelRow(QWidget):
         self.slider.setRange(5, 100)
         self.slider.setValue(int(round(model.opacity * 100)))
         self.slider.setToolTip(tr("opacity"))
-        self.slider.valueChanged.connect(self._opacity)
+        self.slider.valueChanged.connect(lambda v: self._opacity(v))
         bottom.addWidget(self.slider, 1)
         self.pct = QLabel()
         self.pct.setFixedWidth(36)
