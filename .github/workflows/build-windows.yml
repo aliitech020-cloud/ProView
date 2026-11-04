@@ -72,10 +72,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view -R pal1000/mesa-dist-win --json tagName,assets --jq '.tagName, .assets[].name'
-          gh release download -R pal1000/mesa-dist-win --pattern "mesa3d-*-release-msvc*.7z" -D mesa_dl
-          Get-ChildItem mesa_dl/*.7z | ForEach-Object { 7z x $_.FullName "-omesa/$($_.BaseName)" -y | Out-Null }
-          Get-ChildItem -Recurse mesa -Include opengl32.dll, libgallium_wgl.dll, osmesa.dll | Select-Object FullName
+          # newest mesa-dist-win release whose MSVC package still ships the OpenGL driver
+          $tags = gh release list -R pal1000/mesa-dist-win -L 40 --json tagName --jq '.[].tagName'
+          foreach ($t in $tags) {
+            gh release download $t -R pal1000/mesa-dist-win --pattern "mesa3d-*-release-msvc.7z" -D "mesa_dl/$t"
+            $f = Get-ChildItem "mesa_dl/$t/*.7z" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $f) { continue }
+            7z x $f.FullName "-omesa/$t" -y | Out-Null
+            $gl = Get-ChildItem -Recurse "mesa/$t" -Filter opengl32.dll | Where-Object { $_.FullName -match "x64" }
+            if ($gl) { Write-Host "Using Mesa $t"; break }
+            Write-Host "Mesa $t has no opengl32.dll, trying an older one"
+            Remove-Item -Recurse -Force "mesa/$t", "mesa_dl/$t"
+          }
 
       - name: Smoke test exe
         shell: pwsh
