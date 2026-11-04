@@ -530,11 +530,22 @@ def main(argv=None):
         i = argv.index("--selftest")
         out = argv[i + 1] if len(argv) > i + 1 else "selftest.png"
         QTimer.singleShot(1500, lambda: diagnostics.run_selftest(win, app, out))
-        return app.exec()
+        _exit_now(app.exec(), settings)
     files = [a for a in argv[1:] if a.lower().endswith(MESH_EXTENSIONS) and os.path.isfile(a)]
     if files:
         win.open_files(files)
-    return app.exec()
+    _exit_now(app.exec(), settings)
+
+
+def _exit_now(code: int, settings: QSettings) -> None:
+    """Leave without Python's shutdown garbage collection (it crashes on Windows, see gc.disable)."""
+    from . import diagnostics
+
+    settings.sync()
+    diagnostics.log(f"exit {code}")
+    sys.stdout.flush() if sys.stdout else None
+    sys.stderr.flush() if sys.stderr else None
+    os._exit(int(code))
 
 
 if __name__ == "__main__":
