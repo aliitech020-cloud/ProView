@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import numpy as np
-from vtkmodules.util.numpy_support import numpy_to_vtk
+from vtkmodules.vtkIOImage import vtkPNGReader
 from vtkmodules.vtkCommonCore import vtkFloatArray, vtkPoints
 from vtkmodules.vtkCommonDataModel import vtkCellArray, vtkImageData, vtkPolyData
 from vtkmodules.vtkRenderingCore import vtkActor, vtkPolyDataMapper, vtkRenderer, vtkTexture
@@ -23,7 +23,7 @@ FACES = {(0, 1): "right", (0, -1): "left", (1, 1): "back", (1, -1): "front", (2,
 
 
 def _label_texture(text: str, hover: bool = False, size: int = 256) -> vtkTexture:
-    from PySide6.QtCore import QRectF, Qt
+    from PySide6.QtCore import QBuffer, QIODevice, QRectF, Qt
     from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QLinearGradient, QPainter, QPen
 
     img = QImage(size, size, QImage.Format_RGBA8888)
@@ -56,14 +56,19 @@ def _label_texture(text: str, hover: bool = False, size: int = 256) -> vtkTextur
     p.drawText(img.rect(), Qt.AlignCenter, text)
     p.end()
 
-    ptr = img.constBits()
-    arr = np.frombuffer(ptr, dtype=np.uint8, count=img.sizeInBytes()).reshape(size, img.bytesPerLine() // 4, 4)
-    arr = np.ascontiguousarray(arr[::-1, :size])  # VTK images start at the bottom row
+    # Hand the image to VTK as PNG bytes (no raw-pointer sharing between Qt and numpy,
+    # which crashed the garbage collector on Windows).
+    buf = QBuffer()
+    buf.open(QIODevice.WriteOnly)
+    img.save(buf, "PNG")
+    png = bytes(buf.data())
+    buf.close()
+    reader = vtkPNGReader()
+    reader.SetMemoryBuffer(png)
+    reader.SetMemoryBufferLength(len(png))
+    reader.Update()
     data = vtkImageData()
-    data.SetDimensions(size, size, 1)
-    scalars = numpy_to_vtk(arr.reshape(-1, 4), deep=True)
-    scalars.SetNumberOfComponents(4)
-    data.GetPointData().SetScalars(scalars)
+    data.DeepCopy(reader.GetOutput())
     tex = vtkTexture()
     tex.SetInputData(data)
     tex.InterpolateOn()
@@ -108,8 +113,6 @@ class ViewCube:
             mapper.SetInputData(_quad(corners))
             actor = vtkActor()
             actor.SetMapper(mapper)
-            self.textures[name] = (_label_texture(name.upper()), _label_texture(name.upper(), hover=True))
-            actor.SetTexture(self.textures[name][0])
             prop = actor.GetProperty()
             prop.SetAmbient(0.55)
             prop.SetDiffuse(0.55)
@@ -124,7 +127,20 @@ class ViewCube:
     def set_visible(self, on: bool):
         self.ren.SetDraw(on)
 
+    def _ensure_textures(self):
+        """Textures are made on the first frame, once the OpenGL window exists."""
+        if self.textures or not self.viewer.isVisible():
+            return
+        from .diagnostics import log
+
+        log("view cube: creating textures")
+        for name, actor in self.actors.items():
+            self.textures[name] = (_label_texture(name.upper()), _label_texture(name.upper(), hover=True))
+            actor.SetTexture(self.textures[name][0])
+        log("view cube: textures ready")
+
     def sync(self, *_):
+        self._ensure_textures()
         w, hgt = self.viewer.rw.GetSize()
         if w < 10 or hgt < 10:
             return
@@ -171,6 +187,9 @@ class ViewCube:
         """Highlight the face under the cursor. Returns True if a re-render is needed."""
         face = self.hit(x, y) or None
         if face == self._hover:
+            return False
+        self._ensure_textures()
+        if not self.textures:
             return False
         if self._hover:
             self.actors[self._hover].SetTexture(self.textures[self._hover][0])

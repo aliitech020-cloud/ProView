@@ -177,7 +177,11 @@ class Viewer(QVTKRenderWindowInteractor):
 
         from .view_cube import ViewCube
 
+        from .diagnostics import log
+
+        log("viewer: renderer ready")
         self.cube = ViewCube(self)
+        log("viewer: view cube ready")
         self._anim = None
         self.Initialize()
 
