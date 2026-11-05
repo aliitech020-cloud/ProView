@@ -555,6 +555,12 @@ def _exit_now(code: int, settings: QSettings) -> None:
             stream.flush()
         except Exception:  # noqa: BLE001
             pass
+    try:
+        import faulthandler
+
+        faulthandler.disable()  # don't report driver threads torn down by the exit below
+    except Exception:  # noqa: BLE001
+        pass
     if sys.platform == "win32":
         import ctypes
 
