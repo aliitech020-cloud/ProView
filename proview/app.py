@@ -29,6 +29,7 @@ from .icons import app_icon, icon
 from .mesh import MESH_EXTENSIONS, load_mesh, merge_meshes, save_mesh
 from .model import Model
 from .models_panel import ModelsPanel
+from .section_tool import SectionController, SectionPanel
 from .viewer import Viewer
 
 UNDO_LIMIT = 30
@@ -60,6 +61,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.viewer)
 
         self.cut = CutTool(self.viewer, self.active_model, self.push_undo, self._tools_changed)
+        self.section = SectionController(self.viewer, lambda: self._section_changed())
         self.align = AlignController(self.viewer, self.push_undo, self._tools_changed, self.statusBar().showMessage)
 
         self.panel = ModelsPanel(self, self.viewer, self._models_changed, self.merge_models,
@@ -80,6 +82,8 @@ class MainWindow(QMainWindow):
         self.align_panel = AlignPanel(self.align, lambda: list(self.viewer.models))
         self.stack.addWidget(self.cut_panel)
         self.stack.addWidget(self.align_panel)
+        self.section_panel = SectionPanel(self.section, lambda: list(self.viewer.models))
+        self.stack.addWidget(self.section_panel)
         self.tools_dock.setWidget(self.stack)
         self.tools_dock.setMinimumWidth(300)
         self.addDockWidget(Qt.RightDockWidgetArea, self.tools_dock)
@@ -137,12 +141,15 @@ class MainWindow(QMainWindow):
         self.a_cut = self._act(tr("tool_cut"), self._toggle_cut, "X", checkable=True, icon_name="cut")
         self.a_align = self._act(tr("tool_align"), self._toggle_align, "A", checkable=True, icon_name="align")
         a_merge = self._act(tr("merge"), self.merge_models, "M", icon_name="merge")
+        self.a_section = self._act(tr("tool_section"), self._toggle_section, "S", checkable=True,
+                                   icon_name="section")
         grp = QActionGroup(self)
         grp.setExclusionPolicy(QActionGroup.ExclusionPolicy.ExclusiveOptional)
         grp.addAction(self.a_cut)
         grp.addAction(self.a_align)
+        grp.addAction(self.a_section)
         mt = mb.addMenu(tr("menu_tools"))
-        for a in (self.a_cut, self.a_align, a_merge):
+        for a in (self.a_cut, self.a_align, self.a_section, a_merge):
             mt.addAction(a)
 
         a_help = self._act(tr("shortcuts"), lambda: QMessageBox.information(self, tr("shortcuts"), tr("shortcut_text")),
@@ -164,7 +171,8 @@ class MainWindow(QMainWindow):
             tb.addAction(a)
         tb.addWidget(self._spacer())
         tiles = [
-            (self.a_cut, tr("tile_cut")), (self.a_align, tr("tile_align")), (a_merge, tr("tile_merge")),
+            (self.a_cut, tr("tile_cut")), (self.a_align, tr("tile_align")),
+            (self.a_section, tr("tile_section")), (a_merge, tr("tile_merge")),
             (self.a_colors, tr("tile_colors")), (self.a_edges, tr("tile_edges")), (a_fit, tr("tile_fit")),
         ]
         for a, label in tiles:
@@ -278,8 +286,7 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage(tr("loaded", name=name, faces=mesh.n_faces))
         finally:
             QApplication.restoreOverrideCursor()
-        self.align_panel.refresh_models()
-        self._update_info()
+        self._models_changed()
 
     def _add_model(self, model: Model):
         model.set_edges(self.a_edges.isChecked())
@@ -306,8 +313,7 @@ class MainWindow(QMainWindow):
             m.set_visible(False)
         self._add_model(Model(name, mesh, color=parts[0].color))
         self.panel.refresh_rows()
-        self.align_panel.refresh_models()
-        self._update_info()
+        self._models_changed()
         self.statusBar().showMessage(tr("merge_done", n=len(parts), faces=mesh.n_faces))
 
     def _model_selected(self, row):
@@ -321,6 +327,9 @@ class MainWindow(QMainWindow):
 
     def _models_changed(self):
         self.align_panel.refresh_models()
+        self.section_panel.refresh_models()
+        if self.section.active:
+            self.section.update()
         self._update_info()
 
     def _remove_model(self):
@@ -334,8 +343,7 @@ class MainWindow(QMainWindow):
         self.viewer.remove_model(m)
         self.panel.remove_row(row)
         self.undo_stack = [u for u in self.undo_stack if u[0] is not m]
-        self.align_panel.refresh_models()
-        self._update_info()
+        self._models_changed()
 
     def _toggle_edges(self, on):
         for m in self.viewer.models:
@@ -418,7 +426,7 @@ class MainWindow(QMainWindow):
             self.cut.activate()
         else:
             self.cut.deactivate()
-            if not self.a_align.isChecked():
+            if not (self.a_align.isChecked() or self.a_section.isChecked()):
                 self.tools_dock.hide()
 
     def _toggle_align(self, on):
@@ -429,12 +437,33 @@ class MainWindow(QMainWindow):
             self.align_panel.refresh_models()
         else:
             self.align.stop_picking()
-            if not self.a_cut.isChecked():
+            if not (self.a_cut.isChecked() or self.a_section.isChecked()):
                 self.tools_dock.hide()
+
+    def _toggle_section(self, on):
+        if on:
+            self.align.stop_picking()
+            self.stack.setCurrentWidget(self.section_panel)
+            self.tools_dock.setWindowTitle(tr("section_title"))
+            self.tools_dock.setMinimumWidth(380)
+            self.tools_dock.show()
+            self.section_panel.refresh_models()
+            self.section.activate()
+        else:
+            self.section.deactivate()
+            self.tools_dock.setMinimumWidth(300)
+            if not (self.a_cut.isChecked() or self.a_align.isChecked()):
+                self.tools_dock.hide()
+
+    def _section_changed(self):
+        if hasattr(self, "section_panel"):
+            self.section_panel.refresh_view()
 
     def _tools_changed(self):
         self.cut_panel.refresh()
         self.align_panel.refresh()
+        if self.section.active:  # geometry or pose changed: rebuild the section
+            self.section.update()
         self._update_info()
 
     def _cut_mode(self, mode):

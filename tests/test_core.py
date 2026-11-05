@@ -168,3 +168,27 @@ def test_ply_roundtrip_and_formats():
         assert mm.colors.shape == (mm.n_vertices, 3) and (mm.colors[-1] == [255, 0, 0]).all()
         save_mesh(os.path.join(d, "c.ply"), mm)
         assert (load_mesh(os.path.join(d, "c.ply")).colors == mm.colors).all()
+
+
+def test_plane_section_and_gap():
+    from proview.section import gap_analysis, plane_basis, plane_section, to_plane_2d
+
+    m = bumpy_mesh(120, 80)
+    segs = plane_section(m.vertices, m.faces, [0, 0, 0], [0, 1, 0])
+    assert len(segs) > 50
+    assert np.allclose(segs[..., 1], 0, atol=1e-9)  # all on the plane y = 0
+    # the section of a closed surface is closed: every end point is shared by two segments
+    ends = np.round(segs.reshape(-1, 3), 6)
+    _, counts = np.unique(ends, axis=0, return_counts=True)
+    assert (counts % 2 == 0).mean() > 0.95
+    u, v = plane_basis([0, 1, 0], [0, 0, 1])
+    assert np.allclose(v, [0, 0, 1]) and abs(u @ [0, 1, 0]) < 1e-12
+    s2 = to_plane_2d(segs.reshape(-1, 3), [0, 0, 0], u, v).reshape(-1, 2, 2)
+    # the same surface scaled by 2% is about 2% of the radius (~0.2) away
+    m2 = Mesh(m.vertices * 1.02, m.faces)
+    s2b = to_plane_2d(plane_section(m2.vertices, m2.faces, [0, 0, 0], [0, 1, 0]).reshape(-1, 3),
+                      [0, 0, 0], u, v).reshape(-1, 2, 2)
+    g = gap_analysis(s2, s2b)
+    assert 0.1 < g.mean < 0.4 and g.max < 0.6
+    g0 = gap_analysis(s2, s2)
+    assert g0.max < 1e-9

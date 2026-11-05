@@ -29,6 +29,26 @@ _STRINGS = {
     "scan_colors_row": ("Show this model's scan colors", "إظهار ألوان هذا النموذج"),
     "toggle_visible": ("Show / hide", "إظهار / إخفاء"),
     "drag_panel": ("Drag to move the panel", "اسحب لتحريك اللوحة"),
+    "tool_section": ("Section view", "مقطع"),
+    "tile_section": ("Section", "مقطع"),
+    "section_title": ("Section view", "عرض المقطع"),
+    "section_help": ("Drag a line across the models in the 3D view (left mouse). The models are sliced "
+                     "along that line for viewing only - nothing is changed. Right drag still rotates.",
+                     "ارسم خطًا عبر النماذج في العرض ثلاثي الأبعاد."),
+    "section_offset": ("Move", "تحريك"),
+    "section_clip": ("Hide one side", "إخفاء جهة"),
+    "section_flip": ("Flip side", "عكس الجهة"),
+    "section_clear": ("Clear", "مسح"),
+    "section_none": ("No section yet - drag a line in the 3D view.", "لا يوجد مقطع بعد."),
+    "section_view_help": ("Click two points to measure (snaps to the curves). Wheel = zoom, right drag = pan, "
+                          "double-click = fit. Hover the colored curve to read the gap.",
+                          "انقر نقطتين للقياس. العجلة للتكبير، الزر الأيمن للتحريك."),
+    "gap_reference": ("Reference", "المرجع"),
+    "gap_compared": ("Compared", "المقارن"),
+    "gap_limits": ("Gap colors", "ألوان الفرق"),
+    "gap_choose": ("Choose a reference and a compared model to see the gap.", "اختر نموذجين لعرض الفرق."),
+    "gap_stats": ("Gap along this section:  max {max:.3f} mm  |  mean {mean:.3f} mm",
+                  "الفرق في هذا المقطع: الأقصى {max:.3f} مم | المتوسط {mean:.3f} مم"),
     "tile_cut": ("Cut", "قطع"),
     "tile_align": ("Align", "محاذاة"),
     "tile_merge": ("Merge", "دمج"),
@@ -126,7 +146,7 @@ _STRINGS = {
     "models_tip": ("Ctrl/Shift + click to select several models (for Merge).", "Ctrl + نقر لتحديد عدة نماذج."),
     "drop_hint": ("Open or drag & drop STL / PLY files here", "افتح ملفات STL أو اسحبها وأفلتها هنا"),
     "shortcut_text": (
-        "Ctrl+O  Open\nCtrl+S  Save model\nCtrl+Z  Undo\nX  Cut tool\nA  Alignment tool\nM  Merge models\nE  Show edges\nC  Scan colors\n"
+        "Ctrl+O  Open\nCtrl+S  Save model\nCtrl+Z  Undo\nX  Cut tool\nA  Alignment tool\nS  Section view (measure gaps)\nM  Merge models\nE  Show edges\nC  Scan colors\n"
         "1-6  Front / Back / Left / Right / Top / Bottom,  0  Isometric\nClick a face of the view cube to look at it\n"
         "B / L / P  Brush / Lasso / Points\nDel  Delete selection\nEsc  Cancel / clear selection\n"
         "Enter  Close points polyline\nBackspace  Remove last point\n[ ]  Brush size\nF  Fit all",

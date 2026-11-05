@@ -28,6 +28,13 @@
 - **Auto alignment**: محاذاة تلقائية بدون نقاط.
 - **محاذاة كل النماذج الظاهرة** على النموذج الثابت دفعة واحدة.
 
+### المقطع (Section) — زر `S`
+ارسم خطًا بالماوس عبر النماذج في العرض ثلاثي الأبعاد، فيُقطع العرض على امتداد هذا الخط (للعرض فقط، لا يتغير الملف).
+تظهر لوحة ثنائية الأبعاد فيها خطوط المقطع لكل نموذج:
+- انقر نقطتين لقياس المسافة (تلتصق بالخطوط).
+- اختر **المرجع** و**المقارن** لعرض الفرق بين نموذجين بعد المحاذاة: يُلوَّن الخط بالأخضر/الأصفر/الأحمر حسب حجم الفرق، ويظهر أقصى فرق ومتوسطه وموضعه.
+- شريط **Move** لتحريك المقطع، و **Flip side** لعكس الجهة المخفية.
+
 ### 3. الدمج (Merge) — زر `M`
 حدد نموذجين أو أكثر في القائمة (Ctrl + نقر) ثم اضغط **Merge**، فيتم إنشاء نموذج واحد جديد وتُخفى النماذج الأصلية. إذا لم تحدد شيئًا يتم دمج كل النماذج الظاهرة.
 
@@ -56,6 +63,8 @@
 A Windows desktop STL viewer (Python, Qt/PySide6, VTK) with:
 
 **Cut tool (`X`)** — exocad-style region cutting. Select with a **brush** (`B`), **freehand lasso** (`L`) or **connected points** (`P`, click points on the model, close on the first point / double-click / Enter; you can rotate between clicks). Delete with the **Delete key** or the button. Ctrl inverts the action (deselect). Only visible faces are selected unless *Cut through* is enabled. Also: keep selection, invert, grow/shrink, remove small loose parts, undo (`Ctrl+Z`).
+
+**Section view (`S`)** — drag a line across the models to slice the view (display only). A 2D panel shows each model's section curve; click two points to measure, and pick a reference and compared model to colour the compared curve by gap (green/yellow/red thresholds) with max/mean gap and the max location marked. Move the plane with the slider, flip the hidden side.
 
 **Merge (`M`)** — Ctrl/Shift-click several models in the list and press Merge to combine them into one new model (originals are hidden). With no multi-selection, all visible models are merged.
 

@@ -30,6 +30,10 @@ _ICONS = {
     "merge": f'<circle cx="9" cy="12" r="6" stroke="{ACCENT}"/><circle cx="15" cy="12" r="6" stroke="{GREEN}"/>'
              '<path d="M12 7.2a6 6 0 0 1 0 9.6a6 6 0 0 1 0-9.6Z" fill="#e3e6ec" fill-opacity="0.55" stroke="none"/>',
     "edges": '<path d="M3 20 12 4l9 16Z"/><path d="M7.5 12h9M12 20l-4.5-8M12 20l4.5-8"/>',
+    "section": f'<path d="M4 15c0-5 3.5-9 8-9s8 4 8 9" />'
+               f'<path d="M6.5 15c0-3.6 2.4-6.5 5.5-6.5s5.5 2.9 5.5 6.5" stroke="{ACCENT}"/>'
+               f'<path d="M12 2.5v19" stroke="{GREEN}" stroke-dasharray="2 1.6"/>'
+               '<path d="M3 19.5h18M3 18v3M21 18v3"/>',
     "eye": '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>',
     "eye_off": '<path d="M3 3l18 18M10.6 6.1A9.6 9.6 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.9 3.6M6.4 7.4A16.5 16.5 0 0 0 2.5 12s3.5 6 9.5 6a9 9 0 0 0 4.6-1.3M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
     "scan_colors": f'<path d="M12 3 4 7.5v9L12 21l8-4.5v-9Z"/><path d="M12 12 4 7.5M12 12l8-4.5M12 12v9"/>'
