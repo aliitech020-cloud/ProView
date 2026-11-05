@@ -24,8 +24,9 @@ BRUSH, LASSO, POLYGON = "brush", "lasso", "polygon"
 
 
 class CutTool:
-    def __init__(self, viewer, get_model, push_undo, on_change):
+    def __init__(self, viewer, get_model, push_undo, on_change, push_selection_undo=None):
         self.viewer = viewer
+        self.push_selection_undo = push_selection_undo or (lambda m: None)
         self.get_model = get_model
         self.push_undo = push_undo
         self.on_change = on_change
@@ -168,6 +169,7 @@ class CutTool:
         model = self.get_model()
         if model is None or len(self.poly3d) < 3:
             return
+        self.push_selection_undo(model)
         self._prepare(model)
         poly = project(self.viewer.ren, np.array(self.poly3d))[:, :2]
         _, idx, pts = self._cache
@@ -188,6 +190,7 @@ class CutTool:
         self._mouse = (x, y)
         if self.mode == BRUSH:
             self._subtract = ctrl
+            self.push_selection_undo(model)
             self._prepare(model)
             self._dragging = True
             self._last = (x, y)
@@ -247,6 +250,7 @@ class CutTool:
             return True
         if self.mode == LASSO:
             if self._dragging and len(self._lasso) >= 3 and self._cache is not None:
+                self.push_selection_undo(self._cache[0])
                 _, idx, pts = self._cache
                 self._apply(idx[points_in_polygon(pts, np.array(self._lasso))], self._subtract)
             self._dragging = False
@@ -319,13 +323,15 @@ class CutTool:
     def invert(self):
         m = self.get_model()
         if m is not None:
+            self.push_selection_undo(m)
             m.set_selection(~m.selection)
             self.viewer.render()
             self.on_change()
 
     def clear(self):
         m = self.get_model()
-        if m is not None:
+        if m is not None and m.selection.any():
+            self.push_selection_undo(m)
             m.clear_selection()
             self.viewer.render()
             self.on_change()
@@ -334,6 +340,7 @@ class CutTool:
         m = self.get_model()
         if m is None or not m.selection.any():
             return
+        self.push_selection_undo(m)
         sel = ~m.selection if shrink else m.selection
         vmask = np.zeros(m.mesh.n_vertices, dtype=bool)
         vmask[m.mesh.faces[sel].ravel()] = True
@@ -387,6 +394,10 @@ class CutPanel(QWidget):
         self.size.valueChanged.connect(lambda v: self.tool.set_radius(v))
         lay.addWidget(self.size)
 
+        clear_btn = QPushButton(tr("clear_sel"))
+        clear_btn.clicked.connect(lambda _=False: self.tool.clear())
+        lay.addWidget(clear_btn)
+
         self.through = QCheckBox(tr("through"))
         self.through.toggled.connect(lambda on: setattr(self.tool, "through", on))
         lay.addWidget(self.through)
@@ -398,8 +409,7 @@ class CutPanel(QWidget):
         buttons = [
             ("delete_sel", self.tool.delete_selection, 0, 0, 1, 2),
             ("keep_sel", self.tool.keep_selection, 1, 0, 1, 2),
-            ("invert_sel", self.tool.invert, 2, 0, 1, 1),
-            ("clear_sel", self.tool.clear, 2, 1, 1, 1),
+            ("invert_sel", self.tool.invert, 2, 0, 1, 2),
             ("grow_sel", lambda: self.tool.grow(False), 3, 0, 1, 1),
             ("shrink_sel", lambda: self.tool.grow(True), 3, 1, 1, 1),
             ("remove_islands", self.tool.remove_islands, 4, 0, 1, 2),

@@ -40,6 +40,9 @@
 اسحب الحلقة للتدوير حول محورها، والسهم للتحريك (مع Shift لحركة دقيقة)، أو استخدم أزرار الدرجات.
 **Place model on the plane** يضع النموذج على المستوي، **Cancel changes** يلغي التغييرات منذ فتح الأداة، **Reset to original** يعيد اتجاه الملف الأصلي. يُحفظ الاتجاه الجديد عند الحفظ.
 
+### المواد (Materials)
+انقر على الدائرة الملونة بجانب اسم النموذج لاختيار المادة: جبس (Stone) بألوان مختلفة، زركون لامع أو مطفي، رزن، شمع، لثة، تيتانيوم، ذهب، كروم كوبالت، أو لون مخصص.
+
 ### العرض الحاد (Flat) — زر `H`
 يعرض كل مثلث بإضاءة مستقلة فتظهر الحواف والأشكال الهندسية بوضوح.
 
@@ -75,6 +78,10 @@ A Windows desktop STL viewer (Python, Qt/PySide6, VTK) with:
 **Section view (`S`)** — drag a line across the models to slice the view (display only). A 2D panel shows each model's section curve; click two points to measure, and pick a reference and compared model to colour the compared curve by gap (green/yellow/red thresholds) with max/mean gap and the max location marked. Move the plane with the slider, flip the hidden side.
 
 **Orientation (`O`)** — gizmo with rotation rings and move arrows against a horizontal reference plane, degree step buttons, place on plane, cancel changes and reset to the file's original orientation.
+
+**Materials** — click a model's colour ball: stone (ivory/blue/yellow/pink/green/grey), zirconia glossy/matte, resin, wax, gingiva, titanium, gold, cobalt-chrome, or a custom colour.
+
+**Undo (`Ctrl+Z`)** — undoes cuts, alignment, orientation and every selection step; works from any window of the app.
 
 **Flat shading (`H`)** — faceted shading that makes geometric edges sharp.
 

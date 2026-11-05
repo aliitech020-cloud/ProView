@@ -8,15 +8,29 @@ from vtkmodules.vtkRenderingCore import vtkActor, vtkPolyDataMapper, vtkProperty
 
 from .mesh import Mesh, to_polydata, transform_points
 
-PALETTE = [
-    (0.93, 0.88, 0.78),  # ivory (gypsum)
-    (0.62, 0.78, 0.95),  # light blue
-    (0.70, 0.90, 0.65),  # light green
-    (0.98, 0.72, 0.62),  # salmon
-    (0.85, 0.75, 0.95),  # lavender
-    (0.98, 0.90, 0.55),  # yellow
-    (0.65, 0.92, 0.90),  # cyan
-]
+# Dental material looks: colour + how light reflects (matte stone vs glossy zirconia ...).
+# finish: ambient, diffuse, specular, specular power
+MATERIALS = {
+    "Stone - Ivory": ((0.93, 0.89, 0.80), (0.16, 0.86, 0.06, 6)),
+    "Stone - Blue": ((0.47, 0.64, 0.86), (0.16, 0.86, 0.06, 6)),
+    "Stone - Yellow": ((0.95, 0.83, 0.45), (0.16, 0.86, 0.06, 6)),
+    "Stone - Pink": ((0.93, 0.70, 0.70), (0.16, 0.86, 0.06, 6)),
+    "Stone - Green": ((0.60, 0.80, 0.58), (0.16, 0.86, 0.06, 6)),
+    "Stone - Grey": ((0.70, 0.72, 0.74), (0.16, 0.86, 0.06, 6)),
+    "Zirconia - Glossy": ((0.96, 0.95, 0.91), (0.10, 0.80, 0.85, 70)),
+    "Zirconia - Matte": ((0.95, 0.94, 0.90), (0.18, 0.84, 0.12, 10)),
+    "Resin / PMMA (A2)": ((0.93, 0.87, 0.74), (0.12, 0.82, 0.45, 35)),
+    "Wax - Green": ((0.42, 0.68, 0.45), (0.12, 0.80, 0.55, 30)),
+    "Wax - Blue": ((0.38, 0.55, 0.85), (0.12, 0.80, 0.55, 30)),
+    "Gingiva": ((0.86, 0.48, 0.52), (0.14, 0.82, 0.35, 25)),
+    "Titanium": ((0.66, 0.68, 0.72), (0.12, 0.62, 0.90, 60)),
+    "Gold": ((0.90, 0.72, 0.32), (0.12, 0.62, 0.90, 55)),
+    "Cobalt-Chrome": ((0.78, 0.79, 0.81), (0.12, 0.60, 0.95, 80)),
+}
+DEFAULT_MATERIALS = ["Stone - Ivory", "Stone - Blue", "Stone - Yellow", "Zirconia - Glossy",
+                     "Stone - Green", "Stone - Pink", "Titanium"]
+CUSTOM = "Custom"
+
 SELECT_COLOR = np.array([230, 40, 40], dtype=np.uint8)
 SELECT_COLOR_ON_SCAN = np.array([30, 140, 255], dtype=np.uint8)  # gums are red, so use blue
 
@@ -32,12 +46,16 @@ def numpy_to_vtk_matrix(M: np.ndarray) -> vtkMatrix4x4:
 class Model:
     _counter = 0
 
-    def __init__(self, name: str, mesh: Mesh, path: str | None = None, color=None):
+    def __init__(self, name: str, mesh: Mesh, path: str | None = None, color=None, material=None):
         self.name = name
         self.path = path
-        if color is None:
-            color = PALETTE[Model._counter % len(PALETTE)]
+        if material is None and color is None:
+            material = DEFAULT_MATERIALS[Model._counter % len(DEFAULT_MATERIALS)]
             Model._counter += 1
+        if material is not None:
+            color = MATERIALS[material][0]
+        self.material = material or CUSTOM
+        self.finish = MATERIALS[material][1] if material else (0.12, 0.82, 0.25, 25)
         self.color = tuple(color)
         self.matrix = np.eye(4)
         self.visible = True
@@ -51,17 +69,15 @@ class Model:
         self.actor.SetMapper(self.mapper)
         prop = self.actor.GetProperty()
         prop.SetInterpolationToPhong()
-        prop.SetAmbient(0.12)
-        prop.SetDiffuse(0.82)
-        prop.SetSpecular(0.25)
-        prop.SetSpecularPower(25)
+        prop.SetSpecularColor(1.0, 1.0, 1.0)
         prop.SetEdgeColor(0.25, 0.25, 0.3)
         back = vtkProperty()
         back.SetColor(0.45, 0.5, 0.62)
         back.SetAmbient(0.2)
         back.SetDiffuse(0.7)
         self.actor.SetBackfaceProperty(back)
-        self.set_color(self.color)
+        self.set_color(self.color, keep_material=True)
+        self._apply_finish()
 
         self.mesh: Mesh = mesh
         self.flat = False
@@ -117,7 +133,7 @@ class Model:
             self.mapper.ScalarVisibilityOn()
         else:
             self.mapper.ScalarVisibilityOff()
-        self.actor.GetProperty().SetSpecular(0.08 if self.has_colors and self.show_colors else 0.25)
+        self._apply_finish()
 
     def set_show_colors(self, on: bool) -> None:
         self.show_colors = on
@@ -137,7 +153,27 @@ class Model:
     def _base_rgb(self) -> np.ndarray:
         return (np.array(self.color) * 255).round().astype(np.uint8)
 
-    def set_color(self, color) -> None:
+    def _apply_finish(self) -> None:
+        ambient, diffuse, specular, power = self.finish
+        if getattr(self, "mesh", None) is not None and self.has_colors and self.show_colors:
+            specular = min(specular, 0.08)  # scanned colours: keep them readable
+        prop = self.actor.GetProperty()
+        prop.SetAmbient(ambient)
+        prop.SetDiffuse(diffuse)
+        prop.SetSpecular(specular)
+        prop.SetSpecularPower(power)
+
+    def set_material(self, name: str) -> None:
+        """Apply a material preset (colour and surface finish)."""
+        color, finish = MATERIALS[name]
+        self.material = name
+        self.finish = finish
+        self.set_color(color, keep_material=True)
+        self._apply_finish()
+
+    def set_color(self, color, keep_material: bool = False) -> None:
+        if not keep_material and hasattr(self, "material"):
+            self.material = CUSTOM  # keeps the current finish, only the colour changes
         self.color = tuple(color)
         self.actor.GetProperty().SetColor(*self.color)
         if hasattr(self, "_colors") and not (self.has_colors and self.show_colors):

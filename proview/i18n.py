@@ -69,6 +69,8 @@ _STRINGS = {
     "orient_reset": ("Reset to original", "العودة للأصل"),
     "orient_reset_tip": ("Back to the orientation stored in the file (undoes alignment too)",
                          "العودة لاتجاه الملف الأصلي"),
+    "material": ("Material", "المادة"),
+    "custom_color": ("Custom color...", "لون مخصص..."),
     "tile_cut": ("Cut", "قطع"),
     "tile_align": ("Align", "محاذاة"),
     "tile_merge": ("Merge", "دمج"),

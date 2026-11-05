@@ -113,6 +113,8 @@ def run_selftest(win, app, out_png: str) -> None:
         win.section_panel.refresh_view()
         win.a_section.setChecked(False)
         log("selftest: section ok")
+        win.panel.row_widget(0)._set_material("Zirconia - Glossy")
+        win.panel.row_widget(1)._set_material("Stone - Blue")
         win.a_flat.setChecked(True)
         win.a_flat.setChecked(False)
         win.model_list.setCurrentRow(0)

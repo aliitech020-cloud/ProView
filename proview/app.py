@@ -27,7 +27,7 @@ from .cut_tool import BRUSH, LASSO, POLYGON, CutPanel, CutTool
 from .i18n import set_language, tr
 from .icons import app_icon, icon
 from .mesh import MESH_EXTENSIONS, load_mesh, merge_meshes, save_mesh
-from .model import Model
+from .model import MATERIALS, Model
 from .models_panel import ModelsPanel
 from .orient_tool import OrientController, OrientPanel
 from .section_tool import SectionController, SectionPanel
@@ -61,7 +61,8 @@ class MainWindow(QMainWindow):
         self.viewer = Viewer(self)
         self.setCentralWidget(self.viewer)
 
-        self.cut = CutTool(self.viewer, self.active_model, self.push_undo, self._tools_changed)
+        self.cut = CutTool(self.viewer, self.active_model, self.push_undo, self._tools_changed,
+                           push_selection_undo=lambda m: self.push_selection_undo(m))
         self.section = SectionController(self.viewer, lambda: self._section_changed())
         self.orient = OrientController(self.viewer, self.active_model, self.push_undo,
                                        lambda: self._orient_changed())
@@ -102,6 +103,8 @@ class MainWindow(QMainWindow):
         tip = text.replace("...", "")
         if shortcut:
             a.setShortcut(QKeySequence(shortcut))
+            # also when the floating models panel (a separate window) has focus
+            a.setShortcutContext(Qt.ApplicationShortcut)
             tip += f"  ({QKeySequence(shortcut).toString(QKeySequence.NativeText)})"
         a.setToolTip(tip)
         a.setCheckable(checkable)
@@ -216,6 +219,7 @@ class MainWindow(QMainWindow):
     def _build_shortcuts(self):
         def sc(key, fn):
             s = QShortcut(QKeySequence(key), self)
+            s.setContext(Qt.ApplicationShortcut)
             s.activated.connect(lambda: fn())
 
         sc(Qt.Key_Delete, self._key_delete)
@@ -321,7 +325,9 @@ class MainWindow(QMainWindow):
         name = "Merged - " + names if len(names) < 60 else f"Merged ({len(parts)} models)"
         for m in parts:
             m.set_visible(False)
-        self._add_model(Model(name, mesh, color=parts[0].color))
+        first = parts[0]
+        self._add_model(Model(name, mesh, color=None if first.material in MATERIALS else first.color,
+                              material=first.material if first.material in MATERIALS else None))
         self.panel.refresh_rows()
         self._models_changed()
         self.statusBar().showMessage(tr("merge_done", n=len(parts), faces=mesh.n_faces))
@@ -414,8 +420,18 @@ class MainWindow(QMainWindow):
 
     # ============================================================== undo
     def push_undo(self, model: Model):
-        self.undo_stack.append((model, model.mesh, model.matrix.copy()))
-        del self.undo_stack[:-UNDO_LIMIT]
+        self.undo_stack.append((model, model.mesh, model.matrix.copy(), None, model.selection.copy()))
+        self._trim_undo()
+
+    def push_selection_undo(self, model: Model):
+        """Remember the face selection before a brush stroke / lasso / points cut etc."""
+        self.undo_stack.append((model, None, None, model.selection.copy(), None))
+        self._trim_undo()
+
+    def _trim_undo(self):
+        # keep the last UNDO_LIMIT geometry steps; selection steps are cheap, allow more
+        if len(self.undo_stack) > UNDO_LIMIT * 4:
+            del self.undo_stack[: len(self.undo_stack) - UNDO_LIMIT * 4]
 
     def undo(self):
         if self.cut.active and self.cut.poly3d:
@@ -424,12 +440,19 @@ class MainWindow(QMainWindow):
         if not self.undo_stack:
             self.statusBar().showMessage(tr("nothing_to_undo"), 3000)
             return
-        model, mesh, matrix = self.undo_stack.pop()
+        model, mesh, matrix, selection, kept_selection = self.undo_stack.pop()
         if model not in self.viewer.models:
             return
-        if mesh is not model.mesh:
-            model.set_mesh(mesh)
-        model.set_matrix(matrix)
+        if selection is not None:
+            if len(selection) == model.mesh.n_faces:
+                model.set_selection(selection)
+        else:
+            if mesh is not model.mesh:
+                model.set_mesh(mesh)
+                # show again what was deleted
+                if kept_selection is not None and len(kept_selection) == mesh.n_faces:
+                    model.set_selection(kept_selection)
+            model.set_matrix(matrix)
         self.viewer.render()
         self._tools_changed()
 

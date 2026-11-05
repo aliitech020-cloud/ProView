@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QSize, Qt
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QRadialGradient
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QColorDialog,
@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QPushButton,
     QSlider,
     QToolButton,
@@ -20,8 +21,28 @@ from PySide6.QtWidgets import (
 
 from .i18n import tr
 from .icons import icon
+from .model import MATERIALS
 
 ROW_HEIGHT = 58
+
+
+def _material_icon(color, specular, size=18):
+    """A small shaded ball showing the material colour and how glossy it is."""
+    pm = QPixmap(size, size)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    base = QColor.fromRgbF(*color)
+    g = QRadialGradient(size * 0.35, size * 0.32, size * 0.75)
+    hi = QColor(255, 255, 255) if specular > 0.4 else base.lighter(118)
+    g.setColorAt(0.0, hi)
+    g.setColorAt(0.25 if specular > 0.4 else 0.5, base)
+    g.setColorAt(1.0, base.darker(170))
+    p.setBrush(g)
+    p.setPen(QColor(20, 22, 26))
+    p.drawEllipse(1, 1, size - 2, size - 2)
+    p.end()
+    return QIcon(pm)
 
 
 def _rgb(color, factor=1.0):
@@ -51,13 +72,16 @@ class ModelRow(QWidget):
 
         self.swatch = QToolButton()
         self.swatch.setFixedSize(18, 18)
-        self.swatch.setToolTip(tr("color"))
+        self.swatch.setToolTip(tr("material"))
         self.swatch.clicked.connect(lambda _=False: self._pick_color())
         top.addWidget(self.swatch)
 
         self.name = QLabel()
         self.name.setToolTip(model.name)
         top.addWidget(self.name, 1)
+        self.mat_lbl = QLabel()
+        self.mat_lbl.setStyleSheet("color:#8a909a; font-size:10px;")
+        top.addWidget(self.mat_lbl)
 
         self.colors_btn = QToolButton()
         self.colors_btn.setIcon(icon("scan_colors"))
@@ -96,10 +120,14 @@ class ModelRow(QWidget):
         self.colors_btn.setChecked(m.show_colors)
         self.colors_btn.blockSignals(False)
         r, g, b = _rgb(m.color)
-        self.swatch.setStyleSheet(
-            f"QToolButton{{background:rgb({r},{g},{b}); border:1px solid #15171b; border-radius:9px;}}")
+        self.swatch.setStyleSheet("QToolButton{border:none; background:transparent;}")
+        self.swatch.setIcon(_material_icon(m.color, m.finish[2]))
+        self.swatch.setIconSize(QSize(18, 18))
+        self.swatch.setToolTip(f"{tr('material')}: {m.material}")
         fm = self.name.fontMetrics()
-        self.name.setText(fm.elidedText(m.name, Qt.ElideMiddle, 190))
+        self.name.setText(fm.elidedText(m.name, Qt.ElideMiddle, 120))
+        self.mat_lbl.setText(self.mat_lbl.fontMetrics().elidedText(m.material, Qt.ElideRight, 92))
+        self.name.setToolTip(f"{m.name}\n{tr('material')}: {m.material}")
         self.name.setStyleSheet("color:#e8eaee;" if m.visible else "color:#7d838e;")
         hr, hg, hb = _rgb(m.color, 1.08)
         dr, dg, db = _rgb(m.color, 0.55)
@@ -127,6 +155,37 @@ class ModelRow(QWidget):
         self.panel.changed()
 
     def _pick_color(self):
+        """Material menu: stone colours, zirconia glossy/matte, metals ... or a custom colour."""
+        menu = QMenu(self)
+        menu.setStyleSheet("QMenu { background:#23262c; color:#e6e8ec; border:1px solid #3a3f48; }"
+                           "QMenu::item { padding:5px 22px 5px 8px; }"
+                           "QMenu::item:selected { background:#2b4a70; }"
+                           "QMenu::separator { height:1px; background:#3a3f48; margin:4px 6px; }")
+        group = None
+        for name, (color, _finish) in MATERIALS.items():
+            g = name.split(" - ")[0] if " - " in name else name
+            if group is not None and g != group and (" - " in name or " - " in prev):
+                menu.addSeparator()
+            group, prev = g, name
+            act = menu.addAction(_material_icon(color, _finish[2]), name)
+            act.setCheckable(True)
+            act.setChecked(self.model.material == name)
+            if self.model.material == name:
+                f = act.font()
+                f.setBold(True)
+                act.setFont(f)
+            act.triggered.connect(lambda _=False, n=name: self._set_material(n))
+        menu.addSeparator()
+        custom = menu.addAction(tr("custom_color"))
+        custom.triggered.connect(lambda _=False: self._custom_color())
+        menu.exec(self.swatch.mapToGlobal(self.swatch.rect().bottomLeft()))
+
+    def _set_material(self, name):
+        self.model.set_material(name)
+        self.refresh()
+        self.panel.changed()
+
+    def _custom_color(self):
         c = QColorDialog.getColor(QColor.fromRgbF(*self.model.color), self.panel.window_)
         if c.isValid():
             self.model.set_color((c.redF(), c.greenF(), c.blueF()))
