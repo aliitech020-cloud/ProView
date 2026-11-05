@@ -29,6 +29,7 @@ from .icons import app_icon, icon
 from .mesh import MESH_EXTENSIONS, load_mesh, merge_meshes, save_mesh
 from .model import Model
 from .models_panel import ModelsPanel
+from .orient_tool import OrientController, OrientPanel
 from .section_tool import SectionController, SectionPanel
 from .viewer import Viewer
 
@@ -62,6 +63,8 @@ class MainWindow(QMainWindow):
 
         self.cut = CutTool(self.viewer, self.active_model, self.push_undo, self._tools_changed)
         self.section = SectionController(self.viewer, lambda: self._section_changed())
+        self.orient = OrientController(self.viewer, self.active_model, self.push_undo,
+                                       lambda: self._orient_changed())
         self.align = AlignController(self.viewer, self.push_undo, self._tools_changed, self.statusBar().showMessage)
 
         self.panel = ModelsPanel(self, self.viewer, self._models_changed, self.merge_models,
@@ -84,6 +87,8 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.align_panel)
         self.section_panel = SectionPanel(self.section, lambda: list(self.viewer.models))
         self.stack.addWidget(self.section_panel)
+        self.orient_panel = OrientPanel(self.orient)
+        self.stack.addWidget(self.orient_panel)
         self.tools_dock.setWidget(self.stack)
         self.tools_dock.setMinimumWidth(300)
         self.addDockWidget(Qt.RightDockWidgetArea, self.tools_dock)
@@ -135,12 +140,15 @@ class MainWindow(QMainWindow):
                                   icon_name="scan_colors")
         self.a_colors.setChecked(True)
         mv.addAction(self.a_colors)
+        self.a_flat = self._act(tr("flat_view"), self._toggle_flat, "H", checkable=True, icon_name="flat")
+        mv.addAction(self.a_flat)
         a_par = self._act(tr("parallel"), self.viewer.set_parallel, checkable=True)
         mv.addAction(a_par)
 
         self.a_cut = self._act(tr("tool_cut"), self._toggle_cut, "X", checkable=True, icon_name="cut")
         self.a_align = self._act(tr("tool_align"), self._toggle_align, "A", checkable=True, icon_name="align")
         a_merge = self._act(tr("merge"), self.merge_models, "M", icon_name="merge")
+        self.a_orient = self._act(tr("tool_orient"), self._toggle_orient, "O", checkable=True, icon_name="orient")
         self.a_section = self._act(tr("tool_section"), self._toggle_section, "S", checkable=True,
                                    icon_name="section")
         grp = QActionGroup(self)
@@ -148,8 +156,9 @@ class MainWindow(QMainWindow):
         grp.addAction(self.a_cut)
         grp.addAction(self.a_align)
         grp.addAction(self.a_section)
+        grp.addAction(self.a_orient)
         mt = mb.addMenu(tr("menu_tools"))
-        for a in (self.a_cut, self.a_align, self.a_section, a_merge):
+        for a in (self.a_cut, self.a_align, self.a_section, self.a_orient, a_merge):
             mt.addAction(a)
 
         a_help = self._act(tr("shortcuts"), lambda: QMessageBox.information(self, tr("shortcuts"), tr("shortcut_text")),
@@ -172,8 +181,8 @@ class MainWindow(QMainWindow):
         tb.addWidget(self._spacer())
         tiles = [
             (self.a_cut, tr("tile_cut")), (self.a_align, tr("tile_align")),
-            (self.a_section, tr("tile_section")), (a_merge, tr("tile_merge")),
-            (self.a_colors, tr("tile_colors")), (self.a_edges, tr("tile_edges")), (a_fit, tr("tile_fit")),
+            (self.a_section, tr("tile_section")), (self.a_orient, tr("tile_orient")), (a_merge, tr("tile_merge")),
+            (self.a_colors, tr("tile_colors")), (self.a_flat, tr("tile_flat")), (self.a_edges, tr("tile_edges")), (a_fit, tr("tile_fit")),
         ]
         for a, label in tiles:
             btn = QToolButton()
@@ -291,6 +300,7 @@ class MainWindow(QMainWindow):
     def _add_model(self, model: Model):
         model.set_edges(self.a_edges.isChecked())
         model.set_show_colors(self.a_colors.isChecked())
+        model.set_flat(self.a_flat.isChecked())
         self.viewer.add_model(model, fit=True)
         self.panel.add_model(model)
 
@@ -318,6 +328,8 @@ class MainWindow(QMainWindow):
 
     def _model_selected(self, row):
         m = self.active_model()
+        if self.orient.active and m is not self.orient.model:
+            self.orient.set_model(m)
         for other in self.viewer.models:
             if other is not m and other.selection.any():
                 other.clear_selection()
@@ -348,6 +360,11 @@ class MainWindow(QMainWindow):
     def _toggle_edges(self, on):
         for m in self.viewer.models:
             m.set_edges(on)
+        self.viewer.render()
+
+    def _toggle_flat(self, on):
+        for m in self.viewer.models:
+            m.set_flat(on)
         self.viewer.render()
 
     def _toggle_scan_colors(self, on):
@@ -426,7 +443,7 @@ class MainWindow(QMainWindow):
             self.cut.activate()
         else:
             self.cut.deactivate()
-            if not (self.a_align.isChecked() or self.a_section.isChecked()):
+            if not self._any_panel_tool():
                 self.tools_dock.hide()
 
     def _toggle_align(self, on):
@@ -437,7 +454,7 @@ class MainWindow(QMainWindow):
             self.align_panel.refresh_models()
         else:
             self.align.stop_picking()
-            if not (self.a_cut.isChecked() or self.a_section.isChecked()):
+            if not self._any_panel_tool():
                 self.tools_dock.hide()
 
     def _toggle_section(self, on):
@@ -452,8 +469,29 @@ class MainWindow(QMainWindow):
         else:
             self.section.deactivate()
             self.tools_dock.setMinimumWidth(300)
-            if not (self.a_cut.isChecked() or self.a_align.isChecked()):
+            if not self._any_panel_tool():
                 self.tools_dock.hide()
+
+    def _toggle_orient(self, on):
+        if on:
+            self.align.stop_picking()
+            self.stack.setCurrentWidget(self.orient_panel)
+            self.tools_dock.setWindowTitle(tr("orient_title"))
+            self.tools_dock.show()
+            self.orient.activate()
+            self.orient_panel.refresh()
+        else:
+            self.orient.deactivate()
+            if not self._any_panel_tool():
+                self.tools_dock.hide()
+
+    def _any_panel_tool(self):
+        return any(a.isChecked() for a in (self.a_cut, self.a_align, self.a_section, self.a_orient))
+
+    def _orient_changed(self):
+        if hasattr(self, "orient_panel"):
+            self.orient_panel.refresh()
+            self._update_info()
 
     def _section_changed(self):
         if hasattr(self, "section_panel"):
@@ -464,6 +502,9 @@ class MainWindow(QMainWindow):
         self.align_panel.refresh()
         if self.section.active:  # geometry or pose changed: rebuild the section
             self.section.update()
+        if self.orient.active:
+            self.orient.rebuild()
+            self.orient_panel.refresh()
         self._update_info()
 
     def _cut_mode(self, mode):

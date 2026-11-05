@@ -64,6 +64,7 @@ class Model:
         self.set_color(self.color)
 
         self.mesh: Mesh = mesh
+        self.flat = False
         self.show_colors = True
         self.selection = np.zeros(0, dtype=bool)
         self._world = None
@@ -73,6 +74,9 @@ class Model:
     def set_mesh(self, mesh: Mesh) -> None:
         self.mesh = mesh
         self.polydata = to_polydata(mesh)
+        self._normals = self.polydata.GetPointData().GetNormals()
+        if getattr(self, "flat", False):
+            self.polydata.GetPointData().SetNormals(None)
         self.mapper.SetInputData(self.polydata)
         self.selection = np.zeros(mesh.n_faces, dtype=bool)
         self._colors = np.empty((mesh.n_faces, 3), dtype=np.uint8)
@@ -147,6 +151,19 @@ class Model:
     def set_visible(self, visible: bool) -> None:
         self.visible = visible
         self.actor.SetVisibility(visible)
+
+    def set_flat(self, on: bool) -> None:
+        """Flat (faceted) shading: without vertex normals every triangle is lit on its own,
+        which shows edges and geometric detail sharply."""
+        self.flat = on
+        pd = self.polydata.GetPointData()
+        pd.SetNormals(None if on else self._normals)
+        self.polydata.Modified()
+        prop = self.actor.GetProperty()
+        if on:
+            prop.SetInterpolationToFlat()
+        else:
+            prop.SetInterpolationToPhong()
 
     def set_edges(self, on: bool) -> None:
         self.actor.GetProperty().SetEdgeVisibility(on)

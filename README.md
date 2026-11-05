@@ -35,6 +35,14 @@
 - اختر **المرجع** و**المقارن** لعرض الفرق بين نموذجين بعد المحاذاة: يُلوَّن الخط بالأخضر/الأصفر/الأحمر حسب حجم الفرق، ويظهر أقصى فرق ومتوسطه وموضعه.
 - شريط **Move** لتحريك المقطع، و **Flip side** لعكس الجهة المخفية.
 
+### الاتجاه (Orient) — زر `O`
+لتغيير اتجاه النموذج الأصلي: يظهر مستوٍ أفقي مرجعي (شبكة زرقاء) وحلقات ملونة وأسهم.
+اسحب الحلقة للتدوير حول محورها، والسهم للتحريك (مع Shift لحركة دقيقة)، أو استخدم أزرار الدرجات.
+**Place model on the plane** يضع النموذج على المستوي، **Cancel changes** يلغي التغييرات منذ فتح الأداة، **Reset to original** يعيد اتجاه الملف الأصلي. يُحفظ الاتجاه الجديد عند الحفظ.
+
+### العرض الحاد (Flat) — زر `H`
+يعرض كل مثلث بإضاءة مستقلة فتظهر الحواف والأشكال الهندسية بوضوح.
+
 ### 3. الدمج (Merge) — زر `M`
 حدد نموذجين أو أكثر في القائمة (Ctrl + نقر) ثم اضغط **Merge**، فيتم إنشاء نموذج واحد جديد وتُخفى النماذج الأصلية. إذا لم تحدد شيئًا يتم دمج كل النماذج الظاهرة.
 
@@ -65,6 +73,10 @@ A Windows desktop STL viewer (Python, Qt/PySide6, VTK) with:
 **Cut tool (`X`)** — exocad-style region cutting. Select with a **brush** (`B`), **freehand lasso** (`L`) or **connected points** (`P`, click points on the model, close on the first point / double-click / Enter; you can rotate between clicks). Delete with the **Delete key** or the button. Ctrl inverts the action (deselect). Only visible faces are selected unless *Cut through* is enabled. Also: keep selection, invert, grow/shrink, remove small loose parts, undo (`Ctrl+Z`).
 
 **Section view (`S`)** — drag a line across the models to slice the view (display only). A 2D panel shows each model's section curve; click two points to measure, and pick a reference and compared model to colour the compared curve by gap (green/yellow/red thresholds) with max/mean gap and the max location marked. Move the plane with the slider, flip the hidden side.
+
+**Orientation (`O`)** — gizmo with rotation rings and move arrows against a horizontal reference plane, degree step buttons, place on plane, cancel changes and reset to the file's original orientation.
+
+**Flat shading (`H`)** — faceted shading that makes geometric edges sharp.
 
 **Merge (`M`)** — Ctrl/Shift-click several models in the list and press Merge to combine them into one new model (originals are hidden). With no multi-selection, all visible models are merged.
 

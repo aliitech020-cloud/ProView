@@ -49,6 +49,26 @@ _STRINGS = {
     "gap_choose": ("Choose a reference and a compared model to see the gap.", "اختر نموذجين لعرض الفرق."),
     "gap_stats": ("Gap along this section:  max {max:.3f} mm  |  mean {mean:.3f} mm",
                   "الفرق في هذا المقطع: الأقصى {max:.3f} مم | المتوسط {mean:.3f} مم"),
+    "flat_view": ("Flat (sharp) shading", "عرض حاد"),
+    "tile_flat": ("Flat", "حاد"),
+    "tool_orient": ("Orientation", "الاتجاه"),
+    "tile_orient": ("Orient", "اتجاه"),
+    "orient_title": ("Orientation", "تعديل الاتجاه"),
+    "orient_help": ("Drag a colored ring to rotate the model around that axis, or an arrow to move it "
+                    "(hold Shift for fine steps). Drag elsewhere to turn the camera. The blue plane is "
+                    "horizontal (the XY plane) - use it to level the model. Changes are kept when you save.",
+                    "اسحب الحلقات للتدوير والأسهم للتحريك."),
+    "orient_model": ("Model: {name}", "النموذج: {name}"),
+    "orient_plane": ("Show horizontal reference plane", "إظهار المستوي المرجعي"),
+    "orient_step": ("Step", "الخطوة"),
+    "orient_rotate_axis": ("Rotate {axis}", "تدوير {axis}"),
+    "orient_drop": ("Place model on the plane", "وضع النموذج على المستوي"),
+    "orient_cancel": ("Cancel changes", "إلغاء التغييرات"),
+    "orient_cancel_tip": ("Back to the orientation the model had when you opened this tool",
+                          "العودة للاتجاه عند فتح الأداة"),
+    "orient_reset": ("Reset to original", "العودة للأصل"),
+    "orient_reset_tip": ("Back to the orientation stored in the file (undoes alignment too)",
+                         "العودة لاتجاه الملف الأصلي"),
     "tile_cut": ("Cut", "قطع"),
     "tile_align": ("Align", "محاذاة"),
     "tile_merge": ("Merge", "دمج"),
@@ -146,7 +166,7 @@ _STRINGS = {
     "models_tip": ("Ctrl/Shift + click to select several models (for Merge).", "Ctrl + نقر لتحديد عدة نماذج."),
     "drop_hint": ("Open or drag & drop STL / PLY files here", "افتح ملفات STL أو اسحبها وأفلتها هنا"),
     "shortcut_text": (
-        "Ctrl+O  Open\nCtrl+S  Save model\nCtrl+Z  Undo\nX  Cut tool\nA  Alignment tool\nS  Section view (measure gaps)\nM  Merge models\nE  Show edges\nC  Scan colors\n"
+        "Ctrl+O  Open\nCtrl+S  Save model\nCtrl+Z  Undo\nX  Cut tool\nA  Alignment tool\nS  Section view (measure gaps)\nO  Orientation\nH  Flat (sharp) shading\nM  Merge models\nE  Show edges\nC  Scan colors\n"
         "1-6  Front / Back / Left / Right / Top / Bottom,  0  Isometric\nClick a face of the view cube to look at it\n"
         "B / L / P  Brush / Lasso / Points\nDel  Delete selection\nEsc  Cancel / clear selection\n"
         "Enter  Close points polyline\nBackspace  Remove last point\n[ ]  Brush size\nF  Fit all",

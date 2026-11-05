@@ -34,6 +34,12 @@ _ICONS = {
                f'<path d="M6.5 15c0-3.6 2.4-6.5 5.5-6.5s5.5 2.9 5.5 6.5" stroke="{ACCENT}"/>'
                f'<path d="M12 2.5v19" stroke="{GREEN}" stroke-dasharray="2 1.6"/>'
                '<path d="M3 19.5h18M3 18v3M21 18v3"/>',
+    "flat": f'<path d="M12 3 20 8v8l-8 5-8-5V8Z"/><path d="M12 3v8l8-3M12 11l-8-3M12 11v10"/>'
+            f'<path d="M12 3 20 8l-8 3Z" fill="{ACCENT}" fill-opacity="0.85" stroke="none"/>'
+            f'<path d="M12 11v10l-8-5V8Z" fill="{ACCENT}" fill-opacity="0.35" stroke="none"/>',
+    "orient": f'<path d="M4 17.5 12 21l8-3.5-8-3.5Z" stroke="{ACCENT}"/>'
+              f'<path d="M12 4v10"/><path d="M9.5 6.5 12 4l2.5 2.5"/>'
+              f'<path d="M5.5 9.5a7.5 3.2 0 0 1 13 0" stroke="{GREEN}"/><path d="M18.5 9.5l.2-2.3 1.9 1.4" stroke="{GREEN}"/>',
     "eye": '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>',
     "eye_off": '<path d="M3 3l18 18M10.6 6.1A9.6 9.6 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.9 3.6M6.4 7.4A16.5 16.5 0 0 0 2.5 12s3.5 6 9.5 6a9 9 0 0 0 4.6-1.3M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
     "scan_colors": f'<path d="M12 3 4 7.5v9L12 21l8-4.5v-9Z"/><path d="M12 12 4 7.5M12 12l8-4.5M12 12v9"/>'
