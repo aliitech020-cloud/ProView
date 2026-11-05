@@ -84,7 +84,7 @@ class MainWindow(QMainWindow):
         self.tools_dock.setMinimumWidth(300)
         self.addDockWidget(Qt.RightDockWidgetArea, self.tools_dock)
         self.tools_dock.hide()
-        self.tools_dock.visibilityChanged.connect(lambda _: QTimer.singleShot(0, self.panel.follow))
+        self.tools_dock.visibilityChanged.connect(lambda _: QTimer.singleShot(0, self._follow_panel))
 
     def _act(self, text, slot, shortcut=None, checkable=False, icon_name=None):
         a = QAction(text, self)
@@ -213,27 +213,37 @@ class MainWindow(QMainWindow):
         sc("]", lambda: self._brush_size(1.2))
 
     # ============================================== floating panel tracking
+    # These events can arrive while __init__ is still running (Windows sends a move
+    # event when the 3D view's native window is created), before the panel exists.
+    def _follow_panel(self):
+        panel = getattr(self, "panel", None)
+        if panel is not None:
+            panel.follow()
+
     def showEvent(self, ev):
         super().showEvent(ev)
         QTimer.singleShot(0, self._show_panel)
 
     def _show_panel(self):
-        self.panel.show()
-        self.panel.follow()
+        panel = getattr(self, "panel", None)
+        if panel is not None:
+            panel.show()
+            panel.follow()
 
     def moveEvent(self, ev):
         super().moveEvent(ev)
-        self.panel.follow()
+        self._follow_panel()
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
-        QTimer.singleShot(0, self.panel.follow)
+        QTimer.singleShot(0, self._follow_panel)
 
     def changeEvent(self, ev):
         super().changeEvent(ev)
         if ev.type() == QEvent.WindowStateChange:
-            if self.isMinimized():
-                self.panel.hide()
+            panel = getattr(self, "panel", None)
+            if panel is not None and self.isMinimized():
+                panel.hide()
             else:
                 QTimer.singleShot(0, self._show_panel)
 
