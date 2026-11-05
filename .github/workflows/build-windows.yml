@@ -29,11 +29,11 @@ jobs:
         run: python -m pytest -q tests
 
       - name: Build executable
-        run: pyinstaller --noconfirm ProView.spec
+        run: pyinstaller --noconfirm ProVixel.spec
 
       - name: Portable zip
         shell: pwsh
-        run: Compress-Archive -Path dist/ProView -DestinationPath ProView-portable.zip
+        run: Compress-Archive -Path dist/ProVixel -DestinationPath ProVixel-portable.zip
 
       - name: Build installer
         shell: pwsh
@@ -48,14 +48,14 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: ProView-Setup
+          name: ProVixel-Setup
           path: installer_out/*.exe
 
       - name: Upload portable
         uses: actions/upload-artifact@v4
         with:
-          name: ProView-portable
-          path: ProView-portable.zip
+          name: ProVixel-portable
+          path: ProVixel-portable.zip
 
       - name: Publish release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
@@ -63,7 +63,7 @@ jobs:
         with:
           files: |
             installer_out/*.exe
-            ProView-portable.zip
+            ProVixel-portable.zip
 
       # ---- run the real exe on Windows (software OpenGL via Mesa, the runner has no GPU)
       - name: Get Mesa software OpenGL
@@ -95,9 +95,9 @@ jobs:
           function Run-Exe($dir, $label, $vars) {
             if ($gl) { Copy-Item "$($gl.DirectoryName)\*.dll" $dir -Force }
             foreach ($k in $vars.Keys) { Set-Item "env:$k" $vars[$k] }
-            $logf = "$env:LOCALAPPDATA\ProView\proview.log"
+            $logf = "$env:LOCALAPPDATA\ProVixel\proview.log"
             if (Test-Path $logf) { Remove-Item $logf }
-            $p = Start-Process -FilePath "$dir\ProView.exe" -ArgumentList "--selftest", "$pwd\smoke\$label.png" -PassThru
+            $p = Start-Process -FilePath "$dir\ProVixel.exe" -ArgumentList "--selftest", "$pwd\smoke\$label.png" -PassThru
             if (-not $p.WaitForExit(150000)) { $p.Kill(); Write-Host "TIMEOUT" }
             foreach ($k in $vars.Keys) { Remove-Item "env:$k" }
             Write-Host "=============== $label -> exit code $($p.ExitCode)"
@@ -105,7 +105,7 @@ jobs:
             return $p.ExitCode
           }
           New-Item -ItemType Directory smoke -Force | Out-Null
-          Copy-Item -Recurse dist/ProView smoke/app
+          Copy-Item -Recurse dist/ProVixel smoke/app
           $main = Run-Exe "smoke\app" "default" @{}
           # The self-test writes PASSED to the log once every feature worked. (With the
           # Mesa software driver used on this runner, process teardown itself can still

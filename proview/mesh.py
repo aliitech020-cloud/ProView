@@ -151,7 +151,7 @@ def load_stl(path: str) -> Mesh:
     raise ValueError("Unrecognised STL file")
 
 
-def save_stl(path: str, mesh: Mesh, matrix: np.ndarray | None = None, header: str = "ProView") -> None:
+def save_stl(path: str, mesh: Mesh, matrix: np.ndarray | None = None, header: str = "ProVixel") -> None:
     """Write a binary STL. ``matrix`` (4x4) is applied to the vertices first."""
     verts = mesh.vertices if matrix is None else transform_points(matrix, mesh.vertices)
     tri = verts[mesh.faces]
@@ -370,7 +370,7 @@ def save_ply(path: str, mesh: Mesh, matrix: np.ndarray | None = None) -> None:
     verts = mesh.vertices if matrix is None else transform_points(matrix, mesh.vertices)
     has_color = mesh.colors is not None
     header = (
-        "ply\nformat binary_little_endian 1.0\ncomment ProView\n"
+        "ply\nformat binary_little_endian 1.0\ncomment ProVixel\n"
         f"element vertex {mesh.n_vertices}\nproperty float x\nproperty float y\nproperty float z\n"
         + ("property uchar red\nproperty uchar green\nproperty uchar blue\n" if has_color else "")
         + f"element face {mesh.n_faces}\nproperty list uchar int vertex_indices\nend_header\n"

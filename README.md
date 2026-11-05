@@ -1,8 +1,8 @@
-# ProView — STL Viewer with Cut & Alignment tools
+# ProVixel — STL / PLY Viewer with Cut, Alignment & Section tools
 
 <div dir="rtl">
 
-## ProView — عارض ملفات STL مع أدوات القطع والمحاذاة
+## ProVixel — عارض ملفات STL و PLY مع أدوات القطع والمحاذاة والمقطع
 
 برنامج لويندوز لعرض ملفات STL (مثل نماذج الأسنان والقوالب)، يحتوي على:
 
@@ -55,15 +55,16 @@
 الزر الأيمن: تدوير — الزر الأوسط: تحريك — العجلة: تكبير/تصغير — `F`: ملاءمة الكل. يمكن سحب ملفات STL وإفلاتها داخل البرنامج.
 
 ### الواجهة
+- **Shift + نقر بعجلة الماوس** على نموذج: يصبح شفافًا (ومرة أخرى يرجع). **Ctrl + نقر بالعجلة**: يخفي النموذج.
 - لوحة النماذج عائمة دائمًا فوق العرض (اسحبها من عنوانها). لكل نموذج: زر إظهار/إخفاء، دائرة اللون (انقر لتغييره)، وشريط شفافية خاص به بلون النموذج.
 - مكعب الاتجاهات أعلى اليمين: انقر على أي وجه (TOP / FRONT / RIGHT ...) للانتقال إليه بحركة سلسة. المفاتيح `1`-`6` و `0` للمنظور.
 - ألوان ملفات PLY (ألوان المسح) تظهر تلقائيًا، ويمكن إخفاؤها بزر **Colors** أو `C`. عند الحفظ بصيغة PLY تُحفظ الألوان.
 
 ### التشغيل على ويندوز
-- **مثبّت (Setup):** من Actions حمّل `ProView-Setup` وشغّله؛ يضيف البرنامج لقائمة ابدأ وسطح المكتب ويمكن إلغاء تثبيته من إعدادات ويندوز.
-- **نسخة محمولة (Portable):** حمّل `ProView-portable` وفك الضغط وشغّل `ProView.exe` بدون تثبيت.
+- **مثبّت (Setup):** من Actions حمّل `ProVixel-Setup` وشغّله؛ يضيف البرنامج لقائمة ابدأ وسطح المكتب ويمكن إلغاء تثبيته من إعدادات ويندوز.
+- **نسخة محمولة (Portable):** حمّل `ProVixel-portable` وفك الضغط وشغّل `ProVixel.exe` بدون تثبيت.
 - **من الكود المصدري:** ثبّت Python 3.10+ ثم شغّل `run_windows.bat`.
-- **بناء exe بنفسك:** شغّل `build_windows.bat` والناتج في `dist\ProView\ProView.exe`.
+- **بناء exe بنفسك:** شغّل `build_windows.bat` والناتج في `dist\ProVixel\ProVixel.exe`.
 
 </div>
 
@@ -80,6 +81,8 @@ A Windows desktop STL viewer (Python, Qt/PySide6, VTK) with:
 **Orientation (`O`)** — gizmo with rotation rings and move arrows against a horizontal reference plane, degree step buttons, place on plane, cancel changes and reset to the file's original orientation.
 
 **Materials** — click a model's colour ball: stone (ivory/blue/yellow/pink/green/grey), zirconia glossy/matte, resin, wax, gingiva, titanium, gold, cobalt-chrome, or a custom colour.
+
+**Quick view** — Shift + middle click on a model toggles see-through, Ctrl + middle click hides it.
 
 **Undo (`Ctrl+Z`)** — undoes cuts, alignment, orientation and every selection step; works from any window of the app.
 
@@ -100,9 +103,9 @@ Saving writes binary STL with the model's current pose applied. Non-ASCII (e.g. 
 ### Run / build
 ```bat
 run_windows.bat      :: run from source (creates .venv, installs requirements)
-build_windows.bat    :: builds dist\ProView\ProView.exe with PyInstaller
+build_windows.bat    :: builds dist\ProVixel\ProVixel.exe with PyInstaller
 ```
-The GitHub Actions workflow `.github/workflows/build-windows.yml` builds the Windows executable on every push and uploads `ProView-windows.zip` as an artifact (and attaches it to a release when a `v*` tag is pushed).
+The GitHub Actions workflow `.github/workflows/build-windows.yml` builds the Windows executable on every push and uploads the `ProVixel-Setup` installer and `ProVixel-portable` zip as artifacts (and attaches it to a release when a `v*` tag is pushed).
 
 ### Development
 ```bash

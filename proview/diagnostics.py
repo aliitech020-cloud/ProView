@@ -1,7 +1,7 @@
 """Crash logging and a self-test used by CI on Windows.
 
 The windowed exe has no console, so errors would otherwise vanish. Everything
-goes to %LOCALAPPDATA%\\ProView\\proview.log (or ~/.proview/proview.log).
+goes to %LOCALAPPDATA%\\ProVixel\\proview.log (or ~/.proview/proview.log).
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ _log_file = None
 
 def log_path() -> str:
     base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), ".proview")
-    folder = os.path.join(base, "ProView")
+    folder = os.path.join(base, "ProVixel")
     os.makedirs(folder, exist_ok=True)
     return os.path.join(folder, "proview.log")
 
@@ -37,7 +37,7 @@ def setup() -> None:
         return
     from . import __version__
 
-    log(f"ProView {__version__} | Python {sys.version.split()[0]} | {platform.platform()} | "
+    log(f"ProVixel {__version__} | Python {sys.version.split()[0]} | {platform.platform()} | "
         f"frozen={getattr(sys, 'frozen', False)}")
     faulthandler.enable(_log_file)  # native crashes (e.g. in the OpenGL driver)
 
@@ -54,7 +54,7 @@ def setup() -> None:
             from PySide6.QtWidgets import QApplication, QMessageBox
 
             if QApplication.instance() is not None:
-                QMessageBox.critical(None, "ProView error",
+                QMessageBox.critical(None, "ProVixel error",
                                      f"{exc_type.__name__}: {exc}\n\nDetails were saved to:\n{log_path()}")
         except Exception:  # noqa: BLE001
             pass

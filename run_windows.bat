@@ -1,5 +1,5 @@
 @echo off
-REM Run ProView from source (first run installs the dependencies).
+REM Run ProVixel from source (first run installs the dependencies).
 cd /d "%~dp0"
 if not exist .venv (
     py -3 -m venv .venv || python -m venv .venv

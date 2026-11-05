@@ -71,6 +71,7 @@ class MainWindow(QMainWindow):
         self.panel = ModelsPanel(self, self.viewer, self._models_changed, self.merge_models,
                                  self._remove_model, self._model_selected)
         self.model_list = self.panel.list
+        self.viewer.on_middle_click = lambda x, y, ctrl, shift: self._middle_click(x, y, ctrl, shift)
         self._build_tools_dock()
         self._build_actions()
         self._build_shortcuts()
@@ -343,6 +344,24 @@ class MainWindow(QMainWindow):
         self._update_info()
         self.viewer.render()
 
+    TRANSPARENT = 0.35
+
+    def _middle_click(self, x, y, ctrl, shift):
+        """Shift + middle click: toggle see-through. Ctrl + middle click: hide."""
+        if self.viewer.is_split:
+            return
+        m = self.viewer.model_at(x, y)
+        if m is None:
+            return
+        if ctrl:
+            m.set_visible(False)
+            self.statusBar().showMessage(tr("hidden_model", name=m.name), 4000)
+        else:
+            m.set_opacity(1.0 if m.opacity < 0.99 else self.TRANSPARENT)
+        self.panel.refresh_rows()
+        self.viewer.render()
+        self._models_changed()
+
     def _models_changed(self):
         self.align_panel.refresh_models()
         self.section_panel.refresh_models()
@@ -614,15 +633,15 @@ def main(argv=None):
         try:
             import ctypes
 
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ProView.STLViewer")
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ProVixel.STLViewer")
         except Exception:  # noqa: BLE001
             pass
     app = QApplication.instance() or QApplication(argv)
     diagnostics.log("QApplication created")
     diagnostics.route_vtk_messages()
-    app.setApplicationName("ProView")
+    app.setApplicationName("ProVixel")
     app.setWindowIcon(app_icon())
-    settings = QSettings("ProView", "ProView")
+    settings = QSettings("ProVixel", "ProVixel")
     set_language("en")
     _apply_dark_theme(app)
     win = MainWindow(settings)

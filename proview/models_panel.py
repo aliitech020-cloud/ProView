@@ -138,6 +138,11 @@ class ModelRow(QWidget):
             QSlider::handle:horizontal {{ background:rgb({hr},{hg},{hb}); border:2px solid #15171b;
                 width:14px; height:14px; margin:-5px 0; border-radius:8px; }}
         """)
+        value = int(round(m.opacity * 100))
+        if self.slider.value() != value:
+            self.slider.blockSignals(True)
+            self.slider.setValue(value)
+            self.slider.blockSignals(False)
         self.pct.setText(f"{self.slider.value()}%")
 
     def _visible(self, on):

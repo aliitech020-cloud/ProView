@@ -4,7 +4,7 @@ from __future__ import annotations
 LANG = "en"
 
 _STRINGS = {
-    "app_title": ("ProView - STL Viewer", "ProView - عارض ملفات STL"),
+    "app_title": ("ProVixel - STL Viewer", "ProVixel - عارض ملفات STL"),
     # menus
     "menu_file": ("&File", "&ملف"),
     "menu_edit": ("&Edit", "&تحرير"),
@@ -71,6 +71,8 @@ _STRINGS = {
                          "العودة لاتجاه الملف الأصلي"),
     "material": ("Material", "المادة"),
     "custom_color": ("Custom color...", "لون مخصص..."),
+    "hidden_model": ("{name} hidden - show it again with the eye button in the models list.",
+                     "تم إخفاء {name}"),
     "tile_cut": ("Cut", "قطع"),
     "tile_align": ("Align", "محاذاة"),
     "tile_merge": ("Merge", "دمج"),
@@ -168,15 +170,15 @@ _STRINGS = {
     "models_tip": ("Ctrl/Shift + click to select several models (for Merge).", "Ctrl + نقر لتحديد عدة نماذج."),
     "drop_hint": ("Open or drag & drop STL / PLY files here", "افتح ملفات STL أو اسحبها وأفلتها هنا"),
     "shortcut_text": (
-        "Ctrl+O  Open\nCtrl+S  Save model\nCtrl+Z  Undo\nX  Cut tool\nA  Alignment tool\nS  Section view (measure gaps)\nO  Orientation\nH  Flat (sharp) shading\nM  Merge models\nE  Show edges\nC  Scan colors\n"
+        "Shift + middle click  Model see-through on/off\nCtrl + middle click  Hide model\nCtrl+O  Open\nCtrl+S  Save model\nCtrl+Z  Undo\nX  Cut tool\nA  Alignment tool\nS  Section view (measure gaps)\nO  Orientation\nH  Flat (sharp) shading\nM  Merge models\nE  Show edges\nC  Scan colors\n"
         "1-6  Front / Back / Left / Right / Top / Bottom,  0  Isometric\nClick a face of the view cube to look at it\n"
         "B / L / P  Brush / Lasso / Points\nDel  Delete selection\nEsc  Cancel / clear selection\n"
         "Enter  Close points polyline\nBackspace  Remove last point\n[ ]  Brush size\nF  Fit all",
         "Ctrl+O  فتح\nCtrl+S  حفظ النموذج\nCtrl+Z  تراجع\nX  أداة القطع\nA  أداة المحاذاة\n"
         "B / L / P  فرشاة / لاسو / نقاط\nDel  حذف المحدد\nEsc  إلغاء / إلغاء التحديد\n"
         "Enter  إغلاق مسار النقاط\nBackspace  حذف آخر نقطة\n[ ]  حجم الفرشاة\nF  ملاءمة الكل"),
-    "about_text": ("ProView {v}\nSTL viewer with cutting and alignment tools.",
-                   "ProView {v}\nعارض ملفات STL مع أدوات القطع والمحاذاة."),
+    "about_text": ("ProVixel {v}\nSTL viewer with cutting and alignment tools.",
+                   "ProVixel {v}\nعارض ملفات STL مع أدوات القطع والمحاذاة."),
 }
 
 

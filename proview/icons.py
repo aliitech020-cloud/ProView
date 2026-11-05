@@ -120,46 +120,20 @@ def icon(name: str) -> QIcon:
     return _cache[name]
 
 
-APP_ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1b2a4a"/>
-      <stop offset="1" stop-color="#0a1222"/>
-    </linearGradient>
-    <linearGradient id="tooth" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#cfe3f7"/>
-    </linearGradient>
-    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#2fd4c6"/>
-      <stop offset="1" stop-color="#3b82f6"/>
-    </linearGradient>
-  </defs>
-  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
-  <rect x="8.5" y="8.5" width="239" height="239" rx="55.5" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="2"/>
-  <ellipse cx="128" cy="134" rx="98" ry="34" fill="none" stroke="url(#ring)" stroke-width="9"
-           stroke-linecap="round" stroke-dasharray="420 200" transform="rotate(-18 128 134)"/>
-  <path d="M92 52c-22 0-35 17-35 40 0 25 11 40 18 68 4 17 8 40 22 40 13 0 13-26 20-44 3-8 6-11 11-11s8 3 11 11c7 18 7 44 20 44 14 0 18-23 22-40 7-28 18-43 18-68 0-23-13-40-35-40-15 0-24 8-36 8s-21-8-36-8z"
-        fill="url(#tooth)"/>
-  <path d="M92 52c-22 0-35 17-35 40 0 25 11 40 18 68 4 17 8 40 22 40 13 0 13-26 20-44 3-8 6-11 11-11s8 3 11 11c7 18 7 44 20 44 14 0 18-23 22-40 7-28 18-43 18-68 0-23-13-40-35-40-15 0-24 8-36 8s-21-8-36-8z"
-        fill="none" stroke="#0a1222" stroke-opacity="0.25" stroke-width="3"/>
-  <ellipse cx="128" cy="134" rx="98" ry="34" fill="none" stroke="url(#ring)" stroke-width="9"
-           stroke-linecap="round" stroke-dasharray="0 250 170 200" transform="rotate(-18 128 134)"/>
-  <circle cx="214" cy="96" r="9" fill="#2fd4c6"/>
-</svg>"""
+
 
 
 def app_icon() -> QIcon:
+    """The ProVixel icon (pre-rendered PNGs, see tools/make_icon.py)."""
     if "__app__" not in _cache:
-        renderer = QSvgRenderer(QByteArray(APP_ICON_SVG.encode()))
+        import base64
+
+        from .app_icon_data import PNG_BASE64
+
         ic = QIcon()
-        for size in (16, 24, 32, 48, 64, 128, 256):
-            pm = QPixmap(size, size)
-            pm.fill(Qt.transparent)
-            p = QPainter(pm)
-            p.setRenderHint(QPainter.Antialiasing)
-            renderer.render(p)
-            p.end()
+        for size, data in PNG_BASE64.items():
+            pm = QPixmap()
+            pm.loadFromData(base64.b64decode(data), "PNG")
             ic.addPixmap(pm)
         _cache["__app__"] = ic
     return _cache["__app__"]

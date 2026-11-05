@@ -39,6 +39,9 @@ class ViewerStyle(vtkInteractorStyleTrackballCamera):
         self.AddObserver("LeftButtonReleaseEvent", self._left_up)
         self.AddObserver("RightButtonPressEvent", self._right_down)
         self.AddObserver("RightButtonReleaseEvent", self._right_up)
+        self.AddObserver("MiddleButtonPressEvent", self._middle_down)
+        self.AddObserver("MiddleButtonReleaseEvent", self._middle_up)
+        self._middle_click = None
         self.AddObserver("MouseMoveEvent", self._move)
         self.AddObserver("MouseWheelForwardEvent", self._wheel_fwd)
         self.AddObserver("MouseWheelBackwardEvent", self._wheel_back)
@@ -67,6 +70,26 @@ class ViewerStyle(vtkInteractorStyleTrackballCamera):
         if self.tool is not None and self.tool.on_release(x, y, ctrl, shift):
             return
         self.OnLeftButtonUp()
+
+    # Shift / Ctrl + middle click on a model: quick transparency / hide.
+    # A plain middle drag still pans.
+    def _middle_down(self, *_):
+        x, y, ctrl, shift, _ = self._state()
+        if (ctrl or shift) and self.viewer is not None:
+            self._middle_click = (x, y, ctrl, shift)
+            return
+        self._middle_click = None
+        self.OnMiddleButtonDown()
+
+    def _middle_up(self, *_):
+        if self._middle_click is not None:
+            x0, y0, ctrl, shift = self._middle_click
+            self._middle_click = None
+            x, y, _, _, _ = self._state()
+            if abs(x - x0) + abs(y - y0) <= 6 and self.viewer.on_middle_click is not None:
+                self.viewer.on_middle_click(x, y, ctrl, shift)
+            return
+        self.OnMiddleButtonUp()
 
     def _right_down(self, *_):
         self._right_rotating = True
@@ -194,6 +217,7 @@ class Viewer(QVTKRenderWindowInteractor):
         self.SetInteractorStyle(self.style)
 
         self.models = []
+        self.on_middle_click = None  # set by the main window
         self.split_renderers: list = []
         self._split = False
 
@@ -369,6 +393,19 @@ class Viewer(QVTKRenderWindowInteractor):
         self.rw.AddRenderer(self.ren)
         self.cube.set_visible(True)
         self.render()
+
+    def model_at(self, x, y):
+        """The visible model under display pixel (x, y), nearest to the camera."""
+        from .selection import pick_mesh
+
+        best = None
+        for m in self.models:
+            if not m.visible:
+                continue
+            hit = pick_mesh(self.ren, x, y, m.world_geometry()[0], m.mesh.faces)
+            if hit is not None and (best is None or hit[0] < best[0]):
+                best = (hit[0], m)
+        return None if best is None else best[1]
 
     def poked_renderer(self, x, y):
         return self._Iren.FindPokedRenderer(int(x), int(y))

@@ -1,5 +1,5 @@
-# PyInstaller spec: build with  `pyinstaller ProView.spec`
-# Produces dist/ProView/ProView.exe (one-folder build, fast start-up).
+# PyInstaller spec: build with  `pyinstaller ProVixel.spec`
+# Produces dist/ProVixel/ProVixel.exe (one-folder build, fast start-up).
 import os
 
 block_cipher = None
@@ -35,9 +35,9 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="ProView",
+    name="ProVixel",
     console=False,
-    icon=os.path.join(SPECPATH, "assets", "proview.ico"),
+    icon=os.path.join(SPECPATH, "assets", "provixel.ico"),
     version=os.path.join(SPECPATH, "version_info.txt"),
 )
-coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, name="ProView")
+coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, name="ProVixel")
