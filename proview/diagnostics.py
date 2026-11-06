@@ -131,7 +131,7 @@ def run_selftest(win, app, out_png: str) -> None:
 
         g = _np.linspace(-10, 10, 41)
         X, Y = _np.meshgrid(g, g, indexing="ij")
-        Z = 6 + 2 * _np.cos(X / 3) * _np.cos(Y / 3)
+        Z = 6 + 2 * _np.cos(X / 3) * _np.cos(Y / 3) - 0.04 * (X ** 2 + Y ** 2)  # open edge low, like a scan
         sv = _np.stack([X, Y, Z], -1).reshape(-1, 3)
         sf = []
         for i in range(40):
