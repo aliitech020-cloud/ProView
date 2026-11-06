@@ -92,8 +92,10 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.section_panel)
         self.orient_panel = OrientPanel(self.orient)
         self.stack.addWidget(self.orient_panel)
-        self.builder_panel = BuilderPanel(self.active_model, lambda src, mesh: self._add_built(src, mesh),
-                                          lambda text: self.statusBar().showMessage(text))
+        self.builder_panel = BuilderPanel(lambda: self._selected_models(),
+                                          lambda src, mesh, part: self._add_built(src, mesh, part),
+                                          lambda text: self.statusBar().showMessage(text),
+                                          self.push_undo, lambda: self._tools_changed())
         self.stack.addWidget(self.builder_panel)
         self.tools_dock.setWidget(self.stack)
         self.tools_dock.setMinimumWidth(300)
@@ -550,9 +552,21 @@ class MainWindow(QMainWindow):
         elif not self._any_panel_tool():
             self.tools_dock.hide()
 
-    def _add_built(self, source, mesh):
+    def _selected_models(self):
+        """Models selected in the list (Ctrl+click), or the active one."""
+        if not hasattr(self, "panel"):
+            return []
+        rows = self.panel.selected_rows()
+        models = [self.viewer.models[r] for r in rows if r < len(self.viewer.models)]
+        if not models:
+            m = self.active_model()
+            models = [m] if m is not None else []
+        return models
+
+    def _add_built(self, source, mesh, part=None):
         source.set_visible(False)
-        self._add_model(Model(f"{source.name} - model", mesh, material="Stone - Yellow"))
+        suffix = f" - model {part}" if part else " - model"
+        self._add_model(Model(f"{source.name}{suffix}", mesh, material="Stone - Yellow"))
         self.panel.refresh_rows()
         self._models_changed()
 

@@ -139,6 +139,12 @@ def run_selftest(win, app, out_png: str) -> None:
                 q = i * 41 + j
                 sf += [(q, q + 41, q + 1), (q + 1, q + 41, q + 42)]
         built = build_model(Mesh(sv, _np.array(sf)), BuildOptions(voxel=0.4))
+        upper = build_model(Mesh(sv * [1, 1, -1], _np.array(sf)[:, ::-1]), BuildOptions(voxel=0.4))
+        assert upper.n_faces > 0
+        from .repair import fill_holes
+
+        holed = Mesh(sv, _np.array(sf)).remove_faces(_np.arange(len(sf)) % 997 == 5)
+        fill_holes(holed, 5.0)
         assert built.n_faces > 0
         log("selftest: model builder ok")
         win.model_list.selectAll()

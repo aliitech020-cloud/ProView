@@ -76,10 +76,10 @@ _STRINGS = {
     "tool_builder": ("Model builder", "صنع القالب"),
     "tile_builder": ("Model", "قالب"),
     "builder_title": ("Model builder", "صنع القالب"),
-    "builder_help": ("Turns the selected scan into a printable model: the scan's open edge is extended "
-                     "down to a flat base. Optionally the model is hollowed (open base so resin can drain) "
-                     "and reinforced with a honeycomb. Turn the teeth up first (Orient tool). "
-                     "The result is added as a new model.",
+    "builder_help": ("Turns the selected scan(s) into printable models: the scan's open edge is extended "
+                     "to a flat base. Optionally hollow (open base so resin can drain, smooth inside) and "
+                     "reinforced with a honeycomb. Upper and lower jaws are detected automatically; several "
+                     "selected models or separate arches in one file each get their own model.",
                      "يحوّل المسح المحدد إلى قالب قابل للطباعة."),
     "builder_base": ("Base height", "ارتفاع القاعدة"),
     "builder_hollow": ("Hollow model (open base)", "قالب مجوّف (قاعدة مفتوحة)"),
@@ -92,8 +92,18 @@ _STRINGS = {
     "quality_normal": ("Normal", "عادية"),
     "quality_fast": ("Fast", "سريعة"),
     "builder_go": ("Create model", "إنشاء القالب"),
-    "builder_done": ("Model created ({faces:,} triangles). The scan is hidden; save the new model with "
-                     "File > Save model as.", "تم إنشاء القالب ({faces:,} مثلث)."),
+    "builder_done": ("{n} model(s) created ({faces:,} triangles). The scan is hidden; save a model with "
+                     "File > Save model as.", "تم إنشاء {n} قالب ({faces:,} مثلث)."),
+    "builder_auto": ("Detect teeth direction automatically (upper / lower)", "اكتشاف اتجاه الأسنان تلقائيًا"),
+    "builder_edge": ("Edge smoothing", "تنعيم الحافة"),
+    "builder_inner": ("Inner smoothness", "نعومة الداخل"),
+    "repair_title": ("Repair scan", "إصلاح المسح"),
+    "repair_max": ("Fill holes up to", "سد الثقوب حتى"),
+    "repair_found": ("Holes: {small} will be filled, {big} larger (raise the size to fill them). "
+                     "The scan's outer edge is never closed.",
+                     "ثقوب: {small} ستُسد، {big} أكبر من الحد."),
+    "repair_go": ("Fill holes", "سد الثقوب"),
+    "repair_done": ("{n} hole(s) filled.", "تم سد {n} ثقب."),
     "builder_memory": ("Not enough memory for this quality - choose Normal or Fast.",
                        "الذاكرة غير كافية - اختر جودة أقل."),
     "tile_cut": ("Cut", "قطع"),

@@ -27,6 +27,9 @@ class BuildOptions:
     cell: float = 6.0  # honeycomb cell size, flat to flat (mm)
     rib: float = 1.0  # honeycomb rib thickness (mm)
     voxel: float = 0.2  # voxel size for the hollow part (mm)
+    edge_smooth: float = 1.0  # smooth the scan's open edge over this distance (mm), 0 = off
+    inner_smooth: float = 2.5  # inner surface is a union of balls of this radius (mm), 0 = follow outside
+    auto_orient: bool = True  # find the teeth direction (upper / lower jaw) automatically
 
 
 class BuildError(Exception):
@@ -266,11 +269,28 @@ def build_model(scan: Mesh, opts: BuildOptions, progress=lambda text: None) -> M
         raise BuildError("The model is already closed (no open edge). Use a scan, not a solid model.")
     v = scan.vertices
     main = max(loops, key=lambda lp: _loop_length(v, lp))
+    R = np.eye(3)
+    if opts.auto_orient:
+        # teeth direction: away from the plane of the open edge, towards the bulk of the scan
+        R = rotation_to_z(detect_up(v, main))
+        scan = Mesh(v @ R.T, scan.faces, scan.colors)
+        v = scan.vertices
     edge_z = v[main][:, 2].mean()
     if edge_z > (v[:, 2].min() + v[:, 2].max()) / 2:
         raise BuildError("The open edge of the scan points up. Turn the model so the teeth point up "
-                         "(Orient tool), then try again.")
-    mesh = fill_small_holes(scan, main)
+                         "(Orient tool), or switch on automatic orientation.")
+    from .repair import fill_holes, smooth_open_edge
+
+    progress("Closing small holes")
+    mesh, _, _ = fill_holes(scan, None, keep=main)
+    mesh = Mesh(mesh.vertices, mesh.faces)
+    # vertex numbers can change while cleaning: find the open edge again
+    loops = boundary_loops(mesh.faces)
+    if not loops:
+        raise BuildError("The model has no open edge after closing its holes.")
+    main = max(loops, key=lambda lp: _loop_length(mesh.vertices, lp))
+    if opts.edge_smooth > 0:
+        mesh = smooth_open_edge(mesh, main, opts.edge_smooth)
     z0 = float(mesh.vertices[:, 2].min()) - opts.base_height
 
     # ---------------- outer solid: scan + vertical walls down to z0
@@ -307,7 +327,57 @@ def build_model(scan: Mesh, opts: BuildOptions, progress=lambda text: None) -> M
     allf = np.vstack(parts_f)
 
     progress("Joining the surfaces")
-    return _merge_points(allv, allf)
+    result = _merge_points(allv, allf)
+    if opts.auto_orient:  # back to the scan's own position
+        result = Mesh(result.vertices @ R, result.faces)
+    return result
+
+
+def detect_up(v: np.ndarray, edge_loop) -> np.ndarray:
+    """Unit vector pointing from the scan's open edge towards the teeth."""
+    p = v[edge_loop]
+    c = p.mean(0)
+    _, _, vt = np.linalg.svd(p - c, full_matrices=False)
+    n = vt[2]
+    if ((v - c) @ n).mean() < 0:
+        n = -n
+    return n / np.linalg.norm(n)
+
+
+def rotation_to_z(n: np.ndarray) -> np.ndarray:
+    """Rotation matrix R with R @ n = +Z."""
+    z = np.array([0.0, 0.0, 1.0])
+    n = n / np.linalg.norm(n)
+    c = float(n @ z)
+    if c > 1 - 1e-12:
+        return np.eye(3)
+    if c < -1 + 1e-12:
+        return np.diag([1.0, -1.0, -1.0])
+    axis = np.cross(n, z)
+    s = np.linalg.norm(axis)
+    axis /= s
+    K = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+    return np.eye(3) + s * K + (1 - c) * K @ K
+
+
+def split_parts(mesh: Mesh, min_share: float = 0.02, min_faces: int = 200) -> list[Mesh]:
+    """Separate pieces (e.g. upper and lower arch in one file), small debris dropped."""
+    count, labels = mesh.connected_components()
+    if count <= 1:
+        return [mesh]
+    sizes = np.bincount(labels, minlength=count)
+    keep = [i for i in np.argsort(-sizes) if sizes[i] >= max(min_faces, min_share * mesh.n_faces)]
+    return [mesh.keep_faces(labels == i) for i in keep] or [mesh]
+
+
+def build_models(scan: Mesh, opts: BuildOptions, progress=lambda text: None) -> list[Mesh]:
+    """One model per separate piece of the scan."""
+    parts = split_parts(scan)
+    out = []
+    for i, part in enumerate(parts):
+        prefix = f"Part {i + 1}/{len(parts)}: " if len(parts) > 1 else ""
+        out.append(build_model(part, opts, lambda t, p=prefix: progress(p + t)))
+    return out
 
 
 def _outer(mesh: Mesh, loop_list, z0):
@@ -360,6 +430,14 @@ def _hollow(v_out, f_out, z0, opts: BuildOptions, progress):
     dist = ndimage.distance_transform_edt(inside) * h
     cavity = dist > opts.wall
     del dist
+    if opts.inner_smooth > 0:
+        # opening with a ball: the cavity becomes a union of balls -> smooth, never closer
+        # to the outside than the wall thickness (thicker under the teeth)
+        progress("Smoothing the inside")
+        r = float(opts.inner_smooth)
+        core = ndimage.distance_transform_edt(cavity) * h > r
+        cavity = ndimage.distance_transform_edt(~core) * h <= r
+        del core
     if opts.honeycomb:
         cavity &= ~hex_ribs(nx, ny, x0, y0, h, opts.cell, opts.rib)[:, :, None]
     # keep only cavity parts open to the base (no sealed bubbles)
@@ -374,7 +452,7 @@ def _hollow(v_out, f_out, z0, opts: BuildOptions, progress):
         return None, []
 
     progress("Making the inner surface")
-    field = ndimage.gaussian_filter(cavity.astype(np.float32), 0.7)
+    field = ndimage.gaussian_filter(cavity.astype(np.float32), 1.0)
     del cavity
     surf = _marching(field, (x0 + 0.5 * h, y0 + 0.5 * h, zg0 + 0.5 * h), h)
     del field

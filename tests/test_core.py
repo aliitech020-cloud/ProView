@@ -217,15 +217,18 @@ def test_model_builder_watertight():
     vols = {}
     for name, opts in (("solid", BuildOptions(hollow=False)),
                        ("hollow", BuildOptions(honeycomb=False, voxel=0.3)),
-                       ("honey", BuildOptions(voxel=0.3, cell=5))):
+                       ("honey", BuildOptions(voxel=0.3, cell=5)),
+                       ("exact", BuildOptions(hollow=False, edge_smooth=0))):
         m = build_model(scan, opts)
         assert (_edge_use_counts(m) == 2).all(), name  # closed, manifold edges
         vols[name] = signed_volume(m.vertices, m.faces)
         assert vols[name] > 0
-        # the scan surface is kept exactly
-        assert np.isin(np.round(scan.vertices, 6).view([("", float)] * 3),
-                       np.round(m.vertices, 6).view([("", float)] * 3)).all()
+        # the scan surface is kept (exactly, away from the smoothed open edge)
+        if opts.edge_smooth == 0:
+            assert np.isin(np.round(scan.vertices, 6).view([("", float)] * 3),
+                           np.round(m.vertices, 6).view([("", float)] * 3)).all()
     assert vols["hollow"] < vols["honey"] < vols["solid"]
+    assert abs(vols["exact"] - vols["solid"]) < 0.03 * vols["solid"]
     # a scan stored inside-out gives the same, correctly oriented model
     inv = build_model(Mesh(v, np.array(f)[:, ::-1]), BuildOptions(voxel=0.3, cell=5))
     assert (_edge_use_counts(inv) == 2).all()
@@ -233,9 +236,40 @@ def test_model_builder_watertight():
     # consistent orientation: every directed edge occurs once
     de = np.concatenate([inv.faces[:, [0, 1]], inv.faces[:, [1, 2]], inv.faces[:, [2, 0]]])
     assert len(np.unique(de, axis=0)) == len(de)
-    # upside-down scan is refused with a clear message
+    # an upper-jaw style scan (teeth down) is detected and built the same way
+    upper = build_model(Mesh(v * [1, 1, -1], np.array(f)[:, ::-1]), BuildOptions(hollow=False))
+    assert (_edge_use_counts(upper) == 2).all()
+    assert abs(signed_volume(upper.vertices, upper.faces) - vols["solid"]) < 0.02 * vols["solid"]
+    assert upper.vertices[:, 2].max() > 0.1  # the base was added on the edge side (above, for teeth down)
+    # without automatic orientation it is refused with a clear message
     try:
-        build_model(Mesh(v * [1, 1, -1], np.array(f)[:, ::-1]), BuildOptions(hollow=False))
+        build_model(Mesh(v * [1, 1, -1], np.array(f)[:, ::-1]), BuildOptions(hollow=False, auto_orient=False))
         raise AssertionError("expected BuildError")
     except BuildError:
         pass
+    # two separate arches in one mesh -> one model each
+    from proview.mesh import merge_meshes
+    from proview.model_builder import build_models
+
+    two = merge_meshes([scan, Mesh(scan.vertices + [40, 0, 0], scan.faces)])
+    models = build_models(two, BuildOptions(hollow=False))
+    assert len(models) == 2 and all((_edge_use_counts(mm) == 2).all() for mm in models)
+
+
+def test_fill_holes_smooth_and_closed():
+    from proview.model_builder import boundary_loops
+    from proview.repair import fill_holes
+
+    m = bumpy_mesh(80, 60)
+    # punch a hole: remove faces around one point
+    c = m.face_centroids()
+    hole = np.linalg.norm(c - m.vertices[1500], axis=1) < 2.5
+    holed = m.remove_faces(hole)
+    loops_before = boundary_loops(holed.faces)
+    fixed, filled, remaining = fill_holes(holed, max_size=50, keep=max(loops_before, key=len))
+    assert filled == len(loops_before) - 1 and remaining == 1
+    assert len(boundary_loops(fixed.faces)) == 1  # only the kept (largest) edge stays open
+    # the patch is smooth: new vertices lie close to the original surface
+    from scipy.spatial import cKDTree
+    d, _ = cKDTree(m.vertices).query(fixed.vertices[holed.n_vertices:])
+    assert d.max() < 0.8
