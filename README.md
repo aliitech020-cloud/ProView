@@ -40,6 +40,13 @@
 اسحب الحلقة للتدوير حول محورها، والسهم للتحريك (مع Shift لحركة دقيقة)، أو استخدم أزرار الدرجات.
 **Place model on the plane** يضع النموذج على المستوي، **Cancel changes** يلغي التغييرات منذ فتح الأداة، **Reset to original** يعيد اتجاه الملف الأصلي. يُحفظ الاتجاه الجديد عند الحفظ.
 
+### صنع القالب (Model) — زر Model
+يحوّل المسح المحدد (الأسنان للأعلى — استخدم Orient أولًا) إلى قالب جاهز للطباعة بضغطة زر:
+- يمد حافة المسح عموديًا إلى قاعدة مستوية ويغلقه (يبقى سطح المسح كما هو تمامًا).
+- **مجوّف** اختياريًا بسماكة جدار تختارها، مع قاعدة مفتوحة لتصريف الريزن.
+- **خلايا سداسية** (Honeycomb) اختياريًا في الداخل للتقوية.
+- الإعدادات: ارتفاع القاعدة، سماكة الجدار، حجم الخلية، سماكة الضلع، والجودة. النتيجة نموذج جديد مغلق تمامًا (Watertight) يُحفظ من File ← Save model as.
+
 ### المواد (Materials)
 انقر على الدائرة الملونة بجانب اسم النموذج لاختيار المادة: جبس (Stone) بألوان مختلفة، زركون لامع أو مطفي، رزن، شمع، لثة، تيتانيوم، ذهب، كروم كوبالت، أو لون مخصص.
 
@@ -79,6 +86,8 @@ A Windows desktop STL viewer (Python, Qt/PySide6, VTK) with:
 **Section view (`S`)** — drag a line across the models to slice the view (display only). A 2D panel shows each model's section curve; click two points to measure, and pick a reference and compared model to colour the compared curve by gap (green/yellow/red thresholds) with max/mean gap and the max location marked. Move the plane with the slider, flip the hidden side.
 
 **Orientation (`O`)** — gizmo with rotation rings and move arrows against a horizontal reference plane, degree step buttons, place on plane, cancel changes and reset to the file's original orientation.
+
+**Model builder** — one click turns a scan (teeth up) into a closed printable model: the open edge is extended to a flat base; optionally hollow with an open base (wall thickness) and a honeycomb inside (cell size, rib thickness). The scan surface is kept exactly; the result is watertight.
 
 **Materials** — click a model's colour ball: stone (ivory/blue/yellow/pink/green/grey), zirconia glossy/matte, resin, wax, gingiva, titanium, gold, cobalt-chrome, or a custom colour.
 

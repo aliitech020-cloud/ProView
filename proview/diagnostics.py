@@ -124,6 +124,23 @@ def run_selftest(win, app, out_png: str) -> None:
         win.orient.cancel()
         win.a_orient.setChecked(False)
         log("selftest: flat + orientation ok")
+        # model builder on an open surface (the first model has an open edge at the poles)
+        import numpy as _np
+
+        from .model_builder import BuildOptions, build_model
+
+        g = _np.linspace(-10, 10, 41)
+        X, Y = _np.meshgrid(g, g, indexing="ij")
+        Z = 6 + 2 * _np.cos(X / 3) * _np.cos(Y / 3)
+        sv = _np.stack([X, Y, Z], -1).reshape(-1, 3)
+        sf = []
+        for i in range(40):
+            for j in range(40):
+                q = i * 41 + j
+                sf += [(q, q + 41, q + 1), (q + 1, q + 41, q + 42)]
+        built = build_model(Mesh(sv, _np.array(sf)), BuildOptions(voxel=0.4))
+        assert built.n_faces > 0
+        log("selftest: model builder ok")
         win.model_list.selectAll()
         win.merge_models()
         log("selftest: merge ok")

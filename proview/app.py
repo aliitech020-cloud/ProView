@@ -29,6 +29,7 @@ from .icons import app_icon, icon
 from .mesh import MESH_EXTENSIONS, load_mesh, merge_meshes, save_mesh
 from .model import MATERIALS, Model
 from .models_panel import ModelsPanel
+from .builder_tool import BuilderPanel
 from .orient_tool import OrientController, OrientPanel
 from .section_tool import SectionController, SectionPanel
 from .viewer import Viewer
@@ -91,6 +92,9 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.section_panel)
         self.orient_panel = OrientPanel(self.orient)
         self.stack.addWidget(self.orient_panel)
+        self.builder_panel = BuilderPanel(self.active_model, lambda src, mesh: self._add_built(src, mesh),
+                                          lambda text: self.statusBar().showMessage(text))
+        self.stack.addWidget(self.builder_panel)
         self.tools_dock.setWidget(self.stack)
         self.tools_dock.setMinimumWidth(300)
         self.addDockWidget(Qt.RightDockWidgetArea, self.tools_dock)
@@ -153,6 +157,7 @@ class MainWindow(QMainWindow):
         self.a_align = self._act(tr("tool_align"), self._toggle_align, "A", checkable=True, icon_name="align")
         a_merge = self._act(tr("merge"), self.merge_models, "M", icon_name="merge")
         self.a_orient = self._act(tr("tool_orient"), self._toggle_orient, "O", checkable=True, icon_name="orient")
+        self.a_builder = self._act(tr("tool_builder"), self._toggle_builder, checkable=True, icon_name="builder")
         self.a_section = self._act(tr("tool_section"), self._toggle_section, "S", checkable=True,
                                    icon_name="section")
         grp = QActionGroup(self)
@@ -161,8 +166,9 @@ class MainWindow(QMainWindow):
         grp.addAction(self.a_align)
         grp.addAction(self.a_section)
         grp.addAction(self.a_orient)
+        grp.addAction(self.a_builder)
         mt = mb.addMenu(tr("menu_tools"))
-        for a in (self.a_cut, self.a_align, self.a_section, self.a_orient, a_merge):
+        for a in (self.a_cut, self.a_align, self.a_section, self.a_orient, self.a_builder, a_merge):
             mt.addAction(a)
 
         a_help = self._act(tr("shortcuts"), lambda: QMessageBox.information(self, tr("shortcuts"), tr("shortcut_text")),
@@ -185,7 +191,8 @@ class MainWindow(QMainWindow):
         tb.addWidget(self._spacer())
         tiles = [
             (self.a_cut, tr("tile_cut")), (self.a_align, tr("tile_align")),
-            (self.a_section, tr("tile_section")), (self.a_orient, tr("tile_orient")), (a_merge, tr("tile_merge")),
+            (self.a_section, tr("tile_section")), (self.a_orient, tr("tile_orient")),
+            (self.a_builder, tr("tile_builder")), (a_merge, tr("tile_merge")),
             (self.a_colors, tr("tile_colors")), (self.a_flat, tr("tile_flat")), (self.a_edges, tr("tile_edges")), (a_fit, tr("tile_fit")),
         ]
         for a, label in tiles:
@@ -337,6 +344,8 @@ class MainWindow(QMainWindow):
         m = self.active_model()
         if self.orient.active and m is not self.orient.model:
             self.orient.set_model(m)
+        if self.a_builder.isChecked():
+            self.builder_panel.refresh()
         for other in self.viewer.models:
             if other is not m and other.selection.any():
                 other.clear_selection()
@@ -528,7 +537,24 @@ class MainWindow(QMainWindow):
                 self.tools_dock.hide()
 
     def _any_panel_tool(self):
-        return any(a.isChecked() for a in (self.a_cut, self.a_align, self.a_section, self.a_orient))
+        return any(a.isChecked() for a in (self.a_cut, self.a_align, self.a_section, self.a_orient,
+                                           self.a_builder))
+
+    def _toggle_builder(self, on):
+        if on:
+            self.align.stop_picking()
+            self.stack.setCurrentWidget(self.builder_panel)
+            self.tools_dock.setWindowTitle(tr("builder_title"))
+            self.tools_dock.show()
+            self.builder_panel.refresh()
+        elif not self._any_panel_tool():
+            self.tools_dock.hide()
+
+    def _add_built(self, source, mesh):
+        source.set_visible(False)
+        self._add_model(Model(f"{source.name} - model", mesh, material="Stone - Yellow"))
+        self.panel.refresh_rows()
+        self._models_changed()
 
     def _orient_changed(self):
         if hasattr(self, "orient_panel"):

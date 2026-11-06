@@ -192,3 +192,50 @@ def test_plane_section_and_gap():
     assert 0.1 < g.mean < 0.4 and g.max < 0.6
     g0 = gap_analysis(s2, s2)
     assert g0.max < 1e-9
+
+
+def _edge_use_counts(m):
+    e = np.sort(np.concatenate([m.faces[:, [0, 1]], m.faces[:, [1, 2]], m.faces[:, [2, 0]]]), 1)
+    _, cnt = np.unique(e, axis=0, return_counts=True)
+    return cnt
+
+
+def test_model_builder_watertight():
+    from proview.model_builder import BuildError, BuildOptions, build_model, signed_volume
+
+    # an open, wavy height-field "scan" with the open edge at the bottom
+    g = np.linspace(-12, 12, 49)
+    X, Y = np.meshgrid(g, g, indexing="ij")
+    Z = 8 + 2.5 * np.cos(X / 3) * np.cos(Y / 2.5) - 0.02 * (X ** 2 + Y ** 2)
+    v = np.stack([X, Y, Z], -1).reshape(-1, 3)
+    f = []
+    for i in range(48):
+        for j in range(48):
+            q = i * 49 + j
+            f += [(q, q + 49, q + 1), (q + 1, q + 49, q + 50)]
+    scan = Mesh(v, np.array(f))
+    vols = {}
+    for name, opts in (("solid", BuildOptions(hollow=False)),
+                       ("hollow", BuildOptions(honeycomb=False, voxel=0.3)),
+                       ("honey", BuildOptions(voxel=0.3, cell=5))):
+        m = build_model(scan, opts)
+        assert (_edge_use_counts(m) == 2).all(), name  # closed, manifold edges
+        vols[name] = signed_volume(m.vertices, m.faces)
+        assert vols[name] > 0
+        # the scan surface is kept exactly
+        assert np.isin(np.round(scan.vertices, 6).view([("", float)] * 3),
+                       np.round(m.vertices, 6).view([("", float)] * 3)).all()
+    assert vols["hollow"] < vols["honey"] < vols["solid"]
+    # a scan stored inside-out gives the same, correctly oriented model
+    inv = build_model(Mesh(v, np.array(f)[:, ::-1]), BuildOptions(voxel=0.3, cell=5))
+    assert (_edge_use_counts(inv) == 2).all()
+    assert abs(signed_volume(inv.vertices, inv.faces) - vols["honey"]) < 1e-6 * vols["honey"] + 1e-3
+    # consistent orientation: every directed edge occurs once
+    de = np.concatenate([inv.faces[:, [0, 1]], inv.faces[:, [1, 2]], inv.faces[:, [2, 0]]])
+    assert len(np.unique(de, axis=0)) == len(de)
+    # upside-down scan is refused with a clear message
+    try:
+        build_model(Mesh(v * [1, 1, -1], np.array(f)[:, ::-1]), BuildOptions(hollow=False))
+        raise AssertionError("expected BuildError")
+    except BuildError:
+        pass
