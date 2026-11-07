@@ -218,7 +218,7 @@ def test_model_builder_watertight():
     for name, opts in (("solid", BuildOptions(hollow=False)),
                        ("hollow", BuildOptions(honeycomb=False, voxel=0.3)),
                        ("honey", BuildOptions(voxel=0.3, cell=5)),
-                       ("exact", BuildOptions(hollow=False, edge_smooth=0))):
+                       ("exact", BuildOptions(hollow=False, edge_smooth=0, trim=False))):
         m = build_model(scan, opts)
         assert (_edge_use_counts(m) == 2).all(), name  # closed, manifold edges
         vols[name] = signed_volume(m.vertices, m.faces)
@@ -228,7 +228,15 @@ def test_model_builder_watertight():
             assert np.isin(np.round(scan.vertices, 6).view([("", float)] * 3),
                            np.round(m.vertices, 6).view([("", float)] * 3)).all()
     assert vols["hollow"] < vols["honey"] < vols["solid"]
-    assert abs(vols["exact"] - vols["solid"]) < 0.03 * vols["solid"]
+    # trimming keeps everything above the cut exactly
+    trimmed = build_model(scan, BuildOptions(hollow=False, edge_smooth=0))
+    from proview.model_builder import boundary_loops as _bl
+    edge = max(_bl(scan.faces), key=len)
+    z_cut = np.quantile(scan.vertices[edge][:, 2], 0.9)
+    above = scan.vertices[scan.vertices[:, 2] > z_cut + 1.0]
+    assert np.isin(np.round(above, 6).view([("", float)] * 3),
+                   np.round(trimmed.vertices, 6).view([("", float)] * 3)).all()
+    assert (_edge_use_counts(trimmed) == 2).all()
     # a scan stored inside-out gives the same, correctly oriented model
     inv = build_model(Mesh(v, np.array(f)[:, ::-1]), BuildOptions(voxel=0.3, cell=5))
     assert (_edge_use_counts(inv) == 2).all()
@@ -240,7 +248,10 @@ def test_model_builder_watertight():
     upper = build_model(Mesh(v * [1, 1, -1], np.array(f)[:, ::-1]), BuildOptions(hollow=False))
     assert (_edge_use_counts(upper) == 2).all()
     assert abs(signed_volume(upper.vertices, upper.faces) - vols["solid"]) < 0.02 * vols["solid"]
-    assert upper.vertices[:, 2].max() > 0.1  # the base was added on the edge side (above, for teeth down)
+    # the base was added on the edge side: above the teeth for an upper jaw (teeth down)
+    flipped_z = (v * [1, 1, -1])[:, 2]
+    assert upper.vertices[:, 2].max() > flipped_z.mean() + 2.0
+    assert upper.vertices[:, 2].min() > flipped_z.min() - 1e-6  # nothing added below the teeth
     # without automatic orientation it is refused with a clear message
     try:
         build_model(Mesh(v * [1, 1, -1], np.array(f)[:, ::-1]), BuildOptions(hollow=False, auto_orient=False))

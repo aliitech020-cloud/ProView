@@ -30,6 +30,11 @@ class BuildOptions:
     edge_smooth: float = 1.0  # smooth the scan's open edge over this distance (mm), 0 = off
     inner_smooth: float = 2.5  # inner surface is a union of balls of this radius (mm), 0 = follow outside
     auto_orient: bool = True  # find the teeth direction (upper / lower jaw) automatically
+    trim: bool = True  # cut the scan's edge flat (removes hanging tissue, undercut flaps)
+    trim_offset: float = 0.0  # mm; 0 = automatic level, positive = cut higher
+
+
+MAX_VOXELS = 40_000_000
 
 
 class BuildError(Exception):
@@ -237,6 +242,11 @@ def voxelize_open_bottom(v, f, z0, x0, y0, zg0, h, nx, ny, nz) -> np.ndarray:
 
 def hex_ribs(nx, ny, x0, y0, h, cell, rib) -> np.ndarray:
     """(nx, ny) mask of vertical honeycomb walls (pointy-top hexagons, flat-to-flat = cell)."""
+    return hex_cell_field(nx, ny, x0, y0, h, cell, rib) <= 0
+
+
+def hex_cell_field(nx, ny, x0, y0, h, cell, rib) -> np.ndarray:
+    """(nx, ny) distance (mm) into the open part of the nearest honeycomb cell; <= 0 on the ribs."""
     xs = x0 + (np.arange(nx) + 0.5) * h
     ys = y0 + (np.arange(ny) + 0.5) * h
     X, Y = np.meshgrid(xs, ys, indexing="ij")
@@ -255,7 +265,7 @@ def hex_ribs(nx, ny, x0, y0, h, cell, rib) -> np.ndarray:
         # hexagon "radius" in the inradius metric (pointy-top: flat sides left/right)
         d = np.maximum(np.abs(px), np.abs(px) * 0.5 + np.abs(py) * np.sqrt(3) / 2)
         best = np.minimum(best, d)
-    return best >= r - rib / 2.0
+    return (r - rib / 2.0) - best
 
 
 # ---------------------------------------------------------------------- main
@@ -279,7 +289,25 @@ def build_model(scan: Mesh, opts: BuildOptions, progress=lambda text: None) -> M
     if edge_z > (v[:, 2].min() + v[:, 2].max()) / 2:
         raise BuildError("The open edge of the scan points up. Turn the model so the teeth point up "
                          "(Orient tool), or switch on automatic orientation.")
-    from .repair import fill_holes, smooth_open_edge
+    from .repair import fill_holes, remove_dangling_faces, smooth_open_edge
+
+    if opts.trim:
+        # a flat cut just above most of the edge: hanging flaps and edges that fold back
+        # under the model are removed, the new edge is a clean line
+        progress("Trimming the scan edge")
+        z_cut = float(np.quantile(v[main][:, 2], 0.9)) + opts.trim_offset
+        if z_cut >= v[:, 2].max() - 0.5:
+            raise BuildError("The trim level is above the teeth. Lower the trim level.")
+        cut = _clip_above(Mesh(v, scan.faces), z_cut)
+        cut = remove_dangling_faces(cut)
+        if cut.n_faces == 0:
+            raise BuildError("Nothing is left after trimming the edge. Lower the trim level.")
+        scan = split_parts(cut, min_share=0.0, min_faces=1)[0]  # the largest piece
+        v = scan.vertices
+        loops = boundary_loops(scan.faces)
+        if not loops:
+            raise BuildError("The trimmed scan has no open edge.")
+        main = max(loops, key=lambda lp: _loop_length(v, lp))
 
     progress("Closing small holes")
     mesh, _, _ = fill_holes(scan, None, keep=main)
@@ -328,6 +356,13 @@ def build_model(scan: Mesh, opts: BuildOptions, progress=lambda text: None) -> M
 
     progress("Joining the surfaces")
     result = _merge_points(allv, allf)
+    # safety net: close any small gap left where base openings touch each other
+    if boundary_loops(result.faces):
+        from .repair import fill_holes
+
+        progress("Checking the model is closed")
+        result, _, _ = fill_holes(result, None)
+        result = Mesh(result.vertices, result.faces)
     if opts.auto_orient:  # back to the scan's own position
         result = Mesh(result.vertices @ R, result.faces)
     return result
@@ -419,42 +454,56 @@ def _hollow(v_out, f_out, z0, opts: BuildOptions, progress):
     nx = int(np.ceil((hi[0] - x0) / h)) + pad
     ny = int(np.ceil((hi[1] - y0) / h)) + pad
     nz = int(np.ceil((hi[2] - zg0) / h)) + pad
-    if nx * ny * nz > 60_000_000:
-        raise BuildError("The model is too large for this quality. Choose a larger voxel size.")
+    if nx * ny * nz > MAX_VOXELS:
+        # the inside is smooth anyway: use a coarser grid instead of refusing
+        h *= (nx * ny * nz / MAX_VOXELS) ** (1 / 3) * 1.02
+        progress(f"Large model: inside resolution {h:.2f} mm")
+        x0 = lo[0] - pad * h + 0.0137 * h
+        y0 = lo[1] - pad * h + 0.0291 * h
+        zg0 = z0 - below * h
+        nx = int(np.ceil((hi[0] - x0) / h)) + pad
+        ny = int(np.ceil((hi[1] - y0) / h)) + pad
+        nz = int(np.ceil((hi[2] - zg0) / h)) + pad
 
     progress("Measuring the inside")
     inside = voxelize_open_bottom(v_out, f_out, z0, x0, y0, zg0, h, nx, ny, nz)
     k0 = int(np.floor((z0 - zg0) / h))  # first layer at/above the base plane
     inside[:, :, :k0 + 1] = inside[:, :, k0 + 1:k0 + 2]  # extend through the base: no floor
     progress("Hollowing")
-    dist = ndimage.distance_transform_edt(inside) * h
-    cavity = dist > opts.wall
-    del dist
+    # f > 0 inside the cavity; a continuous distance field gives a smooth inner surface
+    f = (ndimage.distance_transform_edt(inside).astype(np.float32) * h) - np.float32(opts.wall)
+    del inside
     if opts.inner_smooth > 0:
-        # opening with a ball: the cavity becomes a union of balls -> smooth, never closer
-        # to the outside than the wall thickness (thicker under the teeth)
+        # opening with a ball: the cavity becomes a union of balls -> smooth, does not follow
+        # the teeth, and is never closer to the outside than the wall thickness
         progress("Smoothing the inside")
-        r = float(opts.inner_smooth)
-        core = ndimage.distance_transform_edt(cavity) * h > r
-        cavity = ndimage.distance_transform_edt(~core) * h <= r
+        r = np.float32(opts.inner_smooth)
+        core = ndimage.distance_transform_edt(f > 0).astype(np.float32) * h > r
+        opened = r - ndimage.distance_transform_edt(~core).astype(np.float32) * h
         del core
+        f = np.minimum(f, opened)
+        del opened
     if opts.honeycomb:
-        cavity &= ~hex_ribs(nx, ny, x0, y0, h, opts.cell, opts.rib)[:, :, None]
+        g = hex_cell_field(nx, ny, x0, y0, h, opts.cell, opts.rib).astype(np.float32)
+        f = np.minimum(f, g[:, :, None])
+        del g
     # keep only cavity parts open to the base (no sealed bubbles)
-    labels, n = ndimage.label(cavity)
+    labels, n = ndimage.label(f > 0)
     if n == 0:
         return None, []
     open_labels = np.unique(labels[:, :, 0])
     open_labels = open_labels[open_labels > 0]
-    cavity = np.isin(labels, open_labels)
+    sealed = (labels > 0) & ~np.isin(labels, open_labels)
     del labels
-    if not cavity.any():
+    f[sealed] = -h
+    del sealed
+    if not (f > 0).any():
         return None, []
 
     progress("Making the inner surface")
-    field = ndimage.gaussian_filter(cavity.astype(np.float32), 1.0)
-    del cavity
-    surf = _marching(field, (x0 + 0.5 * h, y0 + 0.5 * h, zg0 + 0.5 * h), h)
+    field = ndimage.gaussian_filter(f, 0.6)
+    del f
+    surf = _marching(field, (x0 + 0.5 * h, y0 + 0.5 * h, zg0 + 0.5 * h), h, level=0.0)
     del field
     if surf.n_faces == 0:
         return None, []
@@ -472,7 +521,7 @@ def _hollow(v_out, f_out, z0, opts: BuildOptions, progress):
     return clipped, holes
 
 
-def _marching(field, origin, h) -> Mesh:
+def _marching(field, origin, h, level=0.5) -> Mesh:
     from vtkmodules.util.numpy_support import numpy_to_vtk
     from vtkmodules.vtkCommonDataModel import vtkImageData
     from vtkmodules.vtkFiltersCore import vtkFlyingEdges3D
@@ -486,7 +535,7 @@ def _marching(field, origin, h) -> Mesh:
     img.GetPointData().SetScalars(arr)
     fe = vtkFlyingEdges3D()
     fe.SetInputData(img)
-    fe.SetValue(0, 0.5)
+    fe.SetValue(0, level)
     fe.ComputeNormalsOff()
     fe.ComputeGradientsOff()
     fe.Update()

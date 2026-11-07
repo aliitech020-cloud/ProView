@@ -95,6 +95,12 @@ _STRINGS = {
     "builder_done": ("{n} model(s) created ({faces:,} triangles). The scan is hidden; save a model with "
                      "File > Save model as.", "تم إنشاء {n} قالب ({faces:,} مثلث)."),
     "builder_auto": ("Detect teeth direction automatically (upper / lower)", "اكتشاف اتجاه الأسنان تلقائيًا"),
+    "builder_trim": ("Trim the scan edge flat", "قص حافة المسح بشكل مستوٍ"),
+    "builder_trim_level": ("Trim level", "مستوى القص"),
+    "builder_trim_tip": ("Cuts the scan with a flat plane just above most of its edge, so hanging tissue and "
+                         "edges that fold back under the model are removed and the base joins a clean line. "
+                         "0 = automatic; a positive value cuts higher (more is removed), negative keeps more.",
+                         "يقص المسح بمستوٍ لإزالة الأنسجة المتدلية. 0 = تلقائي."),
     "builder_edge": ("Edge smoothing", "تنعيم الحافة"),
     "builder_inner": ("Inner smoothness", "نعومة الداخل"),
     "repair_title": ("Repair scan", "إصلاح المسح"),

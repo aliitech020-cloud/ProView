@@ -78,6 +78,14 @@ class BuilderPanel(QWidget):
         self.auto = QCheckBox(tr("builder_auto"))
         self.auto.setChecked(d.auto_orient)
         form.addRow(self.auto)
+        self.trim = QCheckBox(tr("builder_trim"))
+        self.trim.setChecked(d.trim)
+        self.trim.setToolTip(tr("builder_trim_tip"))
+        form.addRow(self.trim)
+        self.trim_off = _spin(d.trim_offset, -20, 30, 0.5)
+        self.trim_off.setToolTip(tr("builder_trim_tip"))
+        form.addRow(tr("builder_trim_level"), self.trim_off)
+        self.trim.toggled.connect(lambda on: self.trim_off.setEnabled(on))
         self.base = _spin(d.base_height, 0.5, 40, 0.5)
         form.addRow(tr("builder_base"), self.base)
         self.edge = _spin(d.edge_smooth, 0.0, 10, 0.5)
@@ -151,7 +159,8 @@ class BuilderPanel(QWidget):
             base_height=self.base.value(), hollow=self.hollow.isChecked(), wall=self.wall.value(),
             honeycomb=self.honey.isChecked(), cell=self.cell.value(), rib=self.rib.value(),
             voxel=float(self.quality.currentData()), edge_smooth=self.edge.value(),
-            inner_smooth=self.inner.value(), auto_orient=self.auto.isChecked())
+            inner_smooth=self.inner.value(), auto_orient=self.auto.isChecked(),
+            trim=self.trim.isChecked(), trim_offset=self.trim_off.value())
 
     # ------------------------------------------------------------------ repair
     def fill(self):
