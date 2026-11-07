@@ -95,7 +95,8 @@ class MainWindow(QMainWindow):
         self.builder_panel = BuilderPanel(lambda: self._selected_models(),
                                           lambda src, mesh, part: self._add_built(src, mesh, part),
                                           lambda text: self.statusBar().showMessage(text),
-                                          self.push_undo, lambda: self._tools_changed())
+                                          self.push_undo, lambda: self._tools_changed(),
+                                          viewer=self.viewer, settings=self.settings)
         self.stack.addWidget(self.builder_panel)
         self.tools_dock.setWidget(self.stack)
         self.tools_dock.setMinimumWidth(300)
@@ -548,9 +549,12 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(self.builder_panel)
             self.tools_dock.setWindowTitle(tr("builder_title"))
             self.tools_dock.show()
+            self.builder_panel.set_active(True)
             self.builder_panel.refresh()
-        elif not self._any_panel_tool():
-            self.tools_dock.hide()
+        else:
+            self.builder_panel.set_active(False)
+            if not self._any_panel_tool():
+                self.tools_dock.hide()
 
     def _selected_models(self):
         """Models selected in the list (Ctrl+click), or the active one."""

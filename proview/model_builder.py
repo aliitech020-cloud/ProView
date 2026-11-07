@@ -295,7 +295,7 @@ def build_model(scan: Mesh, opts: BuildOptions, progress=lambda text: None) -> M
         # a flat cut just above most of the edge: hanging flaps and edges that fold back
         # under the model are removed, the new edge is a clean line
         progress("Trimming the scan edge")
-        z_cut = float(np.quantile(v[main][:, 2], 0.9)) + opts.trim_offset
+        z_cut = trim_level(v, main, opts)
         if z_cut >= v[:, 2].max() - 0.5:
             raise BuildError("The trim level is above the teeth. Lower the trim level.")
         cut = _clip_above(Mesh(v, scan.faces), z_cut)
@@ -337,6 +337,9 @@ def build_model(scan: Mesh, opts: BuildOptions, progress=lambda text: None) -> M
     if opts.hollow:
         inner, holes = _hollow(v_out, f_out, z0, opts, progress)
         bottom_loops += holes
+        if inner is None:
+            progress("! Not hollowed: the model is too thin for this wall thickness and inner "
+                     "smoothness. Use a thinner wall or a lower inner smoothness")
 
     progress("Closing the base")
     cap = _triangulate_planar_loops(bottom_loops, z0)
@@ -369,14 +372,53 @@ def build_model(scan: Mesh, opts: BuildOptions, progress=lambda text: None) -> M
 
 
 def detect_up(v: np.ndarray, edge_loop) -> np.ndarray:
-    """Unit vector pointing from the scan's open edge towards the teeth."""
-    p = v[edge_loop]
-    c = p.mean(0)
-    _, _, vt = np.linalg.svd(p - c, full_matrices=False)
-    n = vt[2]
-    if ((v - c) @ n).mean() < 0:
+    """Unit vector pointing from the scan's open edge towards the teeth.
+
+    The direction is the thin axis of the whole arch (an arch is wide and deep but not
+    tall); its sign points away from the open edge. The edge itself is too uneven
+    (it rises at the back of the arch, flaps hang down) to define the direction.
+    """
+    sample = v if len(v) <= 200_000 else v[np.random.default_rng(0).choice(len(v), 200_000, replace=False)]
+    c = sample.mean(0)
+    _, vecs = np.linalg.eigh(np.cov((sample - c).T))
+    n = vecs[:, 0]
+    if ((v[edge_loop] - c) @ n).mean() > 0:
         n = -n
+    # refine with the occlusal plane: the highest points (cusp tips, incisal edges)
+    for _ in range(4):
+        h = (sample - c) @ n
+        top = sample[h >= np.quantile(h, 0.9)]
+        if len(top) < 10:
+            break
+        tc = top.mean(0)
+        tw, tv = np.linalg.eigh(np.cov((top - tc).T))
+        if tw[0] > 0.15 * tw[1]:  # the top points are not plane-like (not a dental arch): keep
+            break
+        m = tv[:, 0]
+        if m @ n < 0:
+            m = -m
+        if np.degrees(np.arccos(np.clip(m @ n, -1, 1))) > 45:  # implausible jump: keep
+            break
+        n = m
     return n / np.linalg.norm(n)
+
+
+def trim_level(v_local: np.ndarray, edge_loop, opts: "BuildOptions") -> float:
+    """Height of the flat trim (in the teeth-up frame): just above the lowest part of the edge,
+    so hanging tissue is removed but the gum is kept; moved by ``trim_offset``."""
+    return float(np.quantile(v_local[edge_loop][:, 2], 0.2)) + opts.trim_offset
+
+
+def base_frame(scan: Mesh, opts: "BuildOptions"):
+    """(R, edge loop, trim height or None) for a scan in world space; R turns teeth up (+Z)."""
+    loops = boundary_loops(scan.faces)
+    if not loops:
+        raise BuildError("The model is already closed (no open edge). Use a scan, not a solid model.")
+    v = scan.vertices
+    main = max(loops, key=lambda lp: _loop_length(v, lp))
+    R = rotation_to_z(detect_up(v, main)) if opts.auto_orient else np.eye(3)
+    z_cut = trim_level(v @ R.T, main, opts) if opts.trim else None
+    return R, main, z_cut
 
 
 def rotation_to_z(n: np.ndarray) -> np.ndarray:

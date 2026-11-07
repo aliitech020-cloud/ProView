@@ -225,17 +225,19 @@ def test_model_builder_watertight():
         assert vols[name] > 0
         # the scan surface is kept (exactly, away from the smoothed open edge)
         if opts.edge_smooth == 0:
-            assert np.isin(np.round(scan.vertices, 6).view([("", float)] * 3),
-                           np.round(m.vertices, 6).view([("", float)] * 3)).all()
+            from scipy.spatial import cKDTree
+            assert cKDTree(m.vertices).query(scan.vertices)[0].max() < 1e-6
     assert vols["hollow"] < vols["honey"] < vols["solid"]
     # trimming keeps everything above the cut exactly
-    trimmed = build_model(scan, BuildOptions(hollow=False, edge_smooth=0))
+    # (this test surface is a dome, not a dental arch: use its own orientation)
+    trimmed = build_model(scan, BuildOptions(hollow=False, edge_smooth=0, auto_orient=False))
     from proview.model_builder import boundary_loops as _bl
     edge = max(_bl(scan.faces), key=len)
-    z_cut = np.quantile(scan.vertices[edge][:, 2], 0.9)
+    from proview.model_builder import trim_level
+    z_cut = trim_level(scan.vertices, edge, BuildOptions())
     above = scan.vertices[scan.vertices[:, 2] > z_cut + 1.0]
-    assert np.isin(np.round(above, 6).view([("", float)] * 3),
-                   np.round(trimmed.vertices, 6).view([("", float)] * 3)).all()
+    from scipy.spatial import cKDTree
+    assert cKDTree(trimmed.vertices).query(above)[0].max() < 1e-6
     assert (_edge_use_counts(trimmed) == 2).all()
     # a scan stored inside-out gives the same, correctly oriented model
     inv = build_model(Mesh(v, np.array(f)[:, ::-1]), BuildOptions(voxel=0.3, cell=5))
